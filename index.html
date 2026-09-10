@@ -44,6 +44,12 @@ canvas { display: block; }
 .car .stat { font-size: 11px; color: #bbb; }
 .car.selected { border-color: #4cc9f0; background: rgba(76,201,240,0.15); box-shadow: 0 0 18px rgba(76,201,240,0.4); }
 #preview3d canvas { display: block; margin: 4px auto; border-radius: 14px; border: 2px solid rgba(255,255,255,0.35); }
+#playerName { margin-top: 10px; padding: 10px 18px; font-size: 18px; font-weight: 800; letter-spacing: 2px; text-align: center; text-transform: uppercase; color: #fff; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.4); border-radius: 30px; outline: none; width: 260px; }
+#playerName:focus { border-color: #e9c46a; }
+#board { display: flex; flex-direction: column; gap: 4px; align-items: center; margin: 6px 0 2px; }
+.brow { display: flex; gap: 14px; justify-content: space-between; width: 340px; max-width: 86vw; font-size: 14px; color: #fff; background: rgba(255,255,255,0.07); padding: 5px 14px; border-radius: 10px; }
+.brow.empty { justify-content: center; color: #aaa; }
+.brow .mono { font-family: monospace; color: #ffd94d; }
 #wrongway { position: absolute; top: 32%; left: 50%; transform: translateX(-50%) rotate(-4deg); display: none; font-size: 56px; font-weight: 900; letter-spacing: 3px; color: #ff3b30; background: rgba(0,0,0,0.65); border: 4px solid #ff3b30; padding: 10px 34px; border-radius: 16px; text-shadow: 2px 2px 0 #000; animation: wwblink 0.5s steps(2) infinite; }
 @keyframes wwblink { 50% { opacity: 0.55; } }
 #driver-hud { position: absolute; top: 20px; left: 30px; font-size: 22px; font-weight: 800; color: #fff; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 12px; text-shadow: 2px 2px 0 #000; }
@@ -78,7 +84,7 @@ canvas { display: block; }
 <p>A,D / Arrows = steer &nbsp; (AUTO-GAS drives for you — turn it off for manual W/S)</p>
 <p>SHIFT = Drift (release after 1s for turbo) &nbsp; SPACE = Use Item &nbsp; P/Esc = Pause</p>
 <p>Drive through blue boxes to get items. 3 laps. Beat 3 AI karts.</p>
-<p style="color:#e9c46a;font-weight:700;">CHOOSE YOUR DRIVER:</p>
+<input id="playerName" maxlength="12" placeholder="YOUR NAME" autocomplete="off"><p style="color:#e9c46a;font-weight:700;margin-top:12px;">CHOOSE YOUR DRIVER:</p>
 <div id="drivers"></div>
 <p style="color:#4cc9f0;font-weight:700;margin-top:10px;">CHOOSE YOUR CAR:</p>
 <div id="cars"></div>
@@ -88,6 +94,8 @@ canvas { display: block; }
 <div id="diffs"></div>
 <button id="startBtn">START RACE</button><br>
 <button id="autogas-btn">AUTO-GAS: ON</button>
+<p style="color:#e9c46a;font-weight:700;margin-top:12px;">🏆 BEST TIMES:</p>
+<div id="board"></div>
 <p style="font-size:12px;margin-top:10px;">Original cartoon drivers (not affiliated with Disney) — same road, same race for you + AI.</p>
 <div id="load-error">Loading three.js from CDN... if this stays, check your internet connection.</div>
 </div>
@@ -136,16 +144,17 @@ const AI_COUNT = 3;
 // Original cartoon drivers — same road + same race for player and AI.
 // (Not Disney characters: Disney IP can't be included, so these are originals with distinct looks/stats.)
 const DRIVERS = [
-  { name: 'Blaze',  face: '🦊', num: 4,  color: 0xd63c2f, top: 152, accel: 85,  desc: 'Rosso racer',   art: 'reference/environment/b8a9c282daba7634ea348527b68caf25.jpg' },
-  { name: 'Marina', face: '🐬', num: 7,  color: 0xc9a06a, top: 144, accel: 95,  desc: 'Golden cruise', art: 'reference/environment/754e9648f38d9cc1c73af9163e082258.jpg' },
-  { name: 'Sunny',  face: '🦁', num: 12, color: 0xe8dcc0, top: 148, accel: 88,  desc: 'Cream comet',   art: 'reference/environment/5ecc906f4c6eb7c4496b92e7d763714c.jpg' },
-  { name: 'Pip',    face: '🐧', num: 27, color: 0x2fa8b8, top: 140, accel: 104, desc: 'Alpine dash',   art: 'reference/environment/b5e6a4b5a4f9559a1e568e5d0a2ed0c6.jpg' },
+  { name: 'Blaze',  face: '🦊', num: 4,  color: 0xd63c2f, top: 118, accel: 70,  desc: 'Rosso racer',   art: 'reference/environment/b8a9c282daba7634ea348527b68caf25.jpg' },
+  { name: 'Marina', face: '🐬', num: 7,  color: 0xc9a06a, top: 112, accel: 78,  desc: 'Golden cruise', art: 'reference/environment/754e9648f38d9cc1c73af9163e082258.jpg' },
+  { name: 'Sunny',  face: '🦁', num: 12, color: 0xe8dcc0, top: 115, accel: 72,  desc: 'Cream comet',   art: 'reference/environment/5ecc906f4c6eb7c4496b92e7d763714c.jpg' },
+  { name: 'Pip',    face: '🐧', num: 27, color: 0x2fa8b8, top: 110, accel: 86, desc: 'Alpine dash',   art: 'reference/environment/b5e6a4b5a4f9559a1e568e5d0a2ed0c6.jpg' },
 ];
 const KART_COLORS = DRIVERS.map(d => d.color);
 const ITEM_TYPES = ['mushroom', 'shell', 'banana', 'star'];
 let selectedDriver = 0;
 let selectedCar = 0;
 let autoGas = true;
+let playerName = 'YOU';
 const CARS = [
   { name: 'Sprinter', color: 0xd63c2f, body: 'racer',  model: 'SportsCar2', topMod: 8,  accelMod: 6,  turnMod: 0.25, desc: 'Top speed' },
   { name: 'Bruiser',  color: 0x4a4a55, body: 'racer',  model: 'Cop',        topMod: 0,  accelMod: 18, turnMod: -0.1, desc: 'Punchy start' },
@@ -31374,6 +31383,7 @@ class Kart {
     this.car = car;
     this.isPlayer = isPlayer;
     this.speed = 0;
+    this.rideH = 0.4;
     this.maxSpeed = isPlayer ? driver.top + car.topMod : (driver.top + car.topMod) * (DIFFS[difficulty].aiBase + Math.random() * 0.08);
     this.acceleration = driver.accel + car.accelMod;
     this.brakeForce = 80;
@@ -31435,8 +31445,10 @@ class Kart {
           pivot.add(w);
           this.wheelMeshes.push(pivot);
         });
+        model.position.y = -0.1;
         this.bodyMesh = model;
         this.group.add(model);
+        this.rideH = 0.02;
         const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), new THREE.MeshPhongMaterial({ color: 0xf5f5f5, shininess: 60 }));
         helmet.position.set(0, spec.helmetY, -0.3);
         this.group.add(helmet);
@@ -31459,7 +31471,7 @@ class Kart {
         roundel.position.set(0, spec.roundelY, 1.15);
         this.group.add(roundel);
         const css = '#' + color.toString(16).padStart(6, '0');
-        this.group.add(makeLabel(this.driver.face, (this.isPlayer ? 'YOU ' : '') + this.driver.name, css));
+        this.group.add(makeLabel(this.driver.face, (this.isPlayer ? playerName + ' ' : '') + this.driver.name, css));
         return;
       } catch (err) { /* fall through to procedural */ }
     }
@@ -31597,7 +31609,7 @@ class Kart {
     tail.position.set(0, B.tubY + 0.05, tailZ);
     this.group.add(tail);
     const css = '#' + color.toString(16).padStart(6, '0');
-    this.group.add(makeLabel(this.driver.face, (this.isPlayer ? 'YOU ' : '') + this.driver.name, css));
+    this.group.add(makeLabel(this.driver.face, (this.isPlayer ? playerName + ' ' : '') + this.driver.name, css));
   }
 }
 
@@ -31715,6 +31727,11 @@ function init() {
   minimapCtx = document.getElementById('minimap').getContext('2d');
   setupInput();
   document.getElementById('startBtn').addEventListener('click', startRace);
+  document.getElementById('playerName').addEventListener('input', e => {
+    playerName = (e.target.value || 'YOU').replace(/[<>&"]/g, '').slice(0, 12).toUpperCase() || 'YOU';
+    refreshPreview();
+  });
+  renderBoard();
   document.getElementById('resumeBtn').addEventListener('click', resumeGame);
   document.getElementById('quitBtn').addEventListener('click', () => {
     document.getElementById('pause-screen').style.display = 'none';
@@ -32511,7 +32528,7 @@ function spawnKarts() {
   if (playerKart) scene.remove(playerKart.group);
   aiKarts = [];
   playerKart = createKart(DRIVERS[selectedDriver], CARS[selectedCar], true);
-  document.getElementById('driver-hud').textContent = DRIVERS[selectedDriver].face + ' ' + DRIVERS[selectedDriver].name + ' · ' + CARS[selectedCar].name + ' · ' + DIFFS[difficulty].label;
+  document.getElementById('driver-hud').textContent = playerName + ' · ' + DRIVERS[selectedDriver].face + ' ' + DRIVERS[selectedDriver].name + ' · ' + CARS[selectedCar].name;
   document.getElementById('wrongway').style.display = 'none';
   wwTimer = 0; lastProg = 0;
   raceStart = 0; lapStart = 0; finalTotal = 0; finalLap = 0; lapTimes = [];
@@ -32617,12 +32634,12 @@ function updatePlayerKart(dt) {
   const kart = playerKart;
   if (kart.spinTimer > 0) { kart.spinTimer -= dt; kart.rotation += dt * 10; kart.speed *= 0.95; syncKart(kart, dt); return; }
   const autoCruise = autoGas && !input.forward && !input.backward && gameState === 'racing';
-  let maxS = kart.maxSpeed * (autoCruise ? 1.22 : 1);
+  let maxS = kart.maxSpeed * (autoCruise ? 1.12 : 1);
   if (kart.boostTimer > 0) { maxS *= 1.5; kart.boostTimer -= dt; }
   if (kart.invincibleTimer > 0) { kart.invincibleTimer -= dt; kart.bodyMesh.visible = Math.floor(kart.invincibleTimer * 10) % 2 === 0; }
   else kart.bodyMesh.visible = true;
   const gas = input.forward || autoCruise;
-  if (gas) kart.speed += kart.acceleration * (autoCruise ? 1.8 : 1) * dt;
+  if (gas) kart.speed += kart.acceleration * (autoCruise ? 1.5 : 1) * dt;
   else if (input.backward) kart.speed -= kart.brakeForce * dt;
   else { if (kart.speed > 0) kart.speed -= kart.friction * dt; else if (kart.speed < 0) kart.speed += kart.friction * dt; }
   kart.speed = THREE.MathUtils.clamp(kart.speed, -30, maxS);
@@ -32656,8 +32673,9 @@ function updatePlayerKart(dt) {
 }
 
 function syncKart(kart, dt) {
-  kart.position.y = trackSpline.getPointAt(kart.trackT).y + 0.4;
-  kart.group.position.copy(kart.position);
+  const ty = trackSpline.getPointAt(kart.trackT).y;
+  kart.position.y = ty + 0.4;
+  kart.group.position.set(kart.position.x, ty + (kart.rideH || 0.4), kart.position.z);
   kart.group.rotation.y = kart.rotation;
 }
 
@@ -32852,11 +32870,15 @@ function getPositions() {
   });
 }
 
+let camLook = null;
 function updateCamera(dt) {
   if (!playerKart) return;
-  const behind = new THREE.Vector3(-Math.sin(playerKart.rotation) * 8, 4, -Math.cos(playerKart.rotation) * 8);
-  camera.position.lerp(playerKart.position.clone().add(behind), Math.min(1, 5 * dt));
-  camera.lookAt(playerKart.position.x + Math.sin(playerKart.rotation) * 5, playerKart.position.y + 0.6, playerKart.position.z + Math.cos(playerKart.rotation) * 5);
+  const behind = new THREE.Vector3(-Math.sin(playerKart.rotation) * 8, 4.5, -Math.cos(playerKart.rotation) * 8);
+  camera.position.lerp(playerKart.position.clone().add(behind), Math.min(1, 2.8 * dt));
+  const target = new THREE.Vector3(playerKart.position.x + Math.sin(playerKart.rotation) * 5, playerKart.position.y + 0.6, playerKart.position.z + Math.cos(playerKart.rotation) * 5);
+  if (!camLook) camLook = target.clone();
+  camLook.lerp(target, Math.min(1, 4 * dt));
+  camera.lookAt(camLook);
 }
 
 function updateHUD() {
@@ -32891,13 +32913,36 @@ function updateMinimap() {
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
 }
 
+function loadBoard() {
+  try { return JSON.parse(localStorage.getItem('meadowgp_board_v1') || '[]'); }
+  catch (e) { return []; }
+}
+function renderBoard() {
+  const el = document.getElementById('board');
+  if (!el) return;
+  const rows = loadBoard();
+  if (!rows.length) { el.innerHTML = '<div class="brow empty">No records yet — set one!</div>'; return; }
+  el.innerHTML = rows.map((r, i) => '<div class="brow"><span>#' + (i + 1) + ' ' + r.name + '</span><span>' + r.car + '</span><span class="mono">' + fmtTime(r.time) + '</span></div>').join('');
+}
+function saveRecord(time, best) {
+  const rows = loadBoard();
+  const rec = { name: playerName, car: CARS[selectedCar].name, driver: DRIVERS[selectedDriver].name, time: time, best: best, diff: DIFFS[difficulty].label };
+  rows.push(rec);
+  rows.sort((a, b) => a.time - b.time);
+  const top = rows.slice(0, 8);
+  try { localStorage.setItem('meadowgp_board_v1', JSON.stringify(top)); } catch (e) {}
+  renderBoard();
+  return top.indexOf(rec) + 1;
+}
+
 function showFinishScreen() {
   gameState = 'finished';
   const pos = getPositions().indexOf(playerKart) + 1;
-  document.getElementById('finish-text').textContent = 'YOU FINISHED ' + pos + (['st','nd','rd','th'][pos - 1] || 'th') + '!';
+  document.getElementById('finish-text').textContent = playerName + ' FINISHED ' + pos + (['st','nd','rd','th'][pos - 1] || 'th') + '!';
   const all = lapTimes.concat(finalLap ? [finalLap] : []);
   const best = all.length ? Math.min.apply(null, all) : 0;
-  document.getElementById('finish-time').textContent = 'TIME ' + fmtTime(finalTotal) + '  ·  BEST LAP ' + fmtTime(best);
+  const rank = saveRecord(finalTotal, best);
+  document.getElementById('finish-time').textContent = 'TIME ' + fmtTime(finalTotal) + '  ·  BEST LAP ' + fmtTime(best) + (rank >= 1 && rank <= 3 ? '  ★ RECORD #' + rank + '!' : '');
   document.getElementById('finish-screen').style.display = 'flex';
 }
 
