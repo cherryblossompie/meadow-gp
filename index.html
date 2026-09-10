@@ -31409,10 +31409,21 @@ class Kart {
         const wheels = [];
         model.traverse(o => {
           if (!o.isMesh) return;
-          if (o.material && o.material.name === spec.bodyMat) {
-            o.material = o.material.clone();
-            o.material.color.copy(tint);
+          if (o.material) {
+            const list = Array.isArray(o.material) ? o.material : [o.material];
+            let hit = false;
+            const out = list.map(m => {
+              if (m && m.name === spec.bodyMat) {
+                const c = m.clone();
+                c.color.copy(tint);
+                hit = true;
+                return c;
+              }
+              return m;
+            });
+            if (hit) o.material = Array.isArray(o.material) ? out : out[0];
           }
+          o.castShadow = true;
           if (o.name && o.name.indexOf('Wheel') >= 0) wheels.push(o);
           else ink(o);
         });
