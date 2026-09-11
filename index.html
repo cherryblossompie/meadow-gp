@@ -31,18 +31,23 @@ canvas { display: block; }
 #finish-text { font-size: 80px; font-weight: 900; background: linear-gradient(to right, #e63946, #f4a261, #e9c46a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 #finish-screen button { margin-top: 30px; padding: 16px 48px; font-size: 22px; font-weight: 700; letter-spacing: 3px; border: none; border-radius: 50px; cursor: pointer; background: linear-gradient(135deg, #2a9d8f, #264653); color: #fff; transition: transform 0.2s; }
 #finish-screen button:hover { transform: scale(1.05); }
-#drivers { display: flex; gap: 12px; justify-content: center; margin: 18px 0 4px; flex-wrap: wrap; }
+#drivers { display: grid; grid-template-columns: repeat(4, 122px); gap: 12px; justify-content: center; margin: 18px 0 4px; }
+#drivers .driver { width: auto; }
+@media (max-width: 640px) { #drivers { grid-template-columns: repeat(2, 122px); } #cars { grid-template-columns: repeat(3, 104px) !important; } }
 .driver { width: 120px; padding: 10px 6px 12px; border-radius: 14px; border: 3px solid transparent; background: rgba(255,255,255,0.07); cursor: pointer; color: #fff; }
 .driver .face { font-size: 40px; }
 .driver .name { font-weight: 800; font-size: 14px; margin-top: 4px; }
 .driver .stat { font-size: 11px; color: #bbb; }
 .driver.selected { border-color: #e9c46a; background: rgba(233,196,106,0.15); box-shadow: 0 0 18px rgba(233,196,106,0.4); }
-#cars { display: flex; gap: 12px; justify-content: center; margin: 12px 0 4px; flex-wrap: wrap; }
-.car { width: 120px; padding: 10px 6px 12px; border-radius: 14px; border: 3px solid transparent; background: rgba(255,255,255,0.07); cursor: pointer; color: #fff; }
+#cars { display: grid; grid-template-columns: repeat(6, 104px); gap: 10px; justify-content: center; margin: 12px 0 4px; }
+.car { width: auto; padding: 10px 6px 12px; border-radius: 14px; border: 3px solid transparent; background: rgba(255,255,255,0.07); cursor: pointer; color: #fff; }
 .car .swatch { width: 56px; height: 30px; border-radius: 8px; margin: 2px auto 6px; border: 2px solid rgba(255,255,255,0.6); }
 .car .name { font-weight: 800; font-size: 14px; margin-top: 4px; }
 .car .stat { font-size: 11px; color: #bbb; }
 .car.selected { border-color: #4cc9f0; background: rgba(76,201,240,0.15); box-shadow: 0 0 18px rgba(76,201,240,0.4); }
+.car { background-size: cover; background-position: center; text-shadow: 0 2px 4px #000, 0 0 8px #000; position: relative; overflow: hidden; }
+.car .swatch, .car .name, .car .stat { position: relative; z-index: 1; }
+.car::after { content: ''; position: absolute; inset: 0; border-radius: 11px; background: linear-gradient(rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.6)); pointer-events: none; }
 #preview3d canvas { display: block; margin: 4px auto; border-radius: 14px; border: 2px solid rgba(255,255,255,0.35); }
 #playerName { margin-top: 10px; padding: 10px 18px; font-size: 18px; font-weight: 800; letter-spacing: 2px; text-align: center; text-transform: uppercase; color: #fff; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.4); border-radius: 30px; outline: none; width: 260px; }
 #playerName:focus { border-color: #e9c46a; }
@@ -116,6 +121,8 @@ canvas { display: block; }
 <div id="finish-screen" style="display:none;">
 <h1 id="finish-text">FINISH!</h1>
 <div id="finish-time"></div>
+<p style="color:#e9c46a;font-weight:700;margin-top:14px;">🏆 BEST TIMES:</p>
+<div id="board-finish"></div>
 <button id="restartBtn">RACE AGAIN</button>
 </div>
 <div id="pause-screen" style="display:none;">
@@ -148,6 +155,10 @@ const DRIVERS = [
   { name: 'Marina', face: '🐬', num: 7,  color: 0xc9a06a, top: 112, accel: 78,  desc: 'Golden cruise', art: 'reference/environment/754e9648f38d9cc1c73af9163e082258.jpg' },
   { name: 'Sunny',  face: '🦁', num: 12, color: 0xe8dcc0, top: 115, accel: 72,  desc: 'Cream comet',   art: 'reference/environment/5ecc906f4c6eb7c4496b92e7d763714c.jpg' },
   { name: 'Pip',    face: '🐧', num: 27, color: 0x2fa8b8, top: 110, accel: 86, desc: 'Alpine dash',   art: 'reference/environment/b5e6a4b5a4f9559a1e568e5d0a2ed0c6.jpg' },
+  { name: 'Rusty',  face: '🦀', num: 8,  color: 0xc2503a, top: 108, accel: 84, desc: 'Sideways scuttle', art: 'reference/environment/681c47e67327df136e836ef18168a7bb.jpg' },
+  { name: 'Fern',   face: '🦌', num: 16, color: 0x6a8f3c, top: 106, accel: 88, desc: 'Forest swift',  art: 'reference/environment/ad9dacd2692fb02534e8bb99060b2ad9.jpg' },
+  { name: 'Pebbles', face: '🐢', num: 21, color: 0x7a8a99, top: 104, accel: 90, desc: 'Steady shell', art: 'reference/environment/45b3e12dba92ba5f1d483ccd9263383e.jpg' },
+  { name: 'Zephyr', face: '🦅', num: 33, color: 0x9a7fe0, top: 116, accel: 76, desc: 'Sky hunter',    art: 'reference/environment/a65f9a09af9dd71d8bef504753be982a.jpg' },
 ];
 const KART_COLORS = DRIVERS.map(d => d.color);
 const ITEM_TYPES = ['mushroom', 'shell', 'banana', 'star'];
@@ -167,6 +178,7 @@ const CARS = [
   { name: 'Trailboss', color: 0x5a6b3c, body: 'suv',   model: 'SUV',        topMod: 2,  accelMod: 12, turnMod: 0.1,  desc: '4x4 off-roader' },
   { name: 'Stallion', color: 0x2456c8, body: 'muscle', model: 'SportsCar2', topMod: 10, accelMod: 8,  turnMod: 0.05, desc: 'Muscle coupe' },
   { name: 'Corsa',    color: 0xffc21c, body: 'wedge',  model: 'SportsCar',  topMod: 14, accelMod: 0,  turnMod: 0.1,  desc: 'V12 screamer' },
+  { name: 'Safari',   color: 0xd9a83c, body: 'suv',    model: 'SUV',        topMod: 3,  accelMod: 11, turnMod: 0.05, desc: 'Dune runner' },
 ];
 let difficulty = 'medium';
 const DIFFS = {
@@ -31445,12 +31457,12 @@ class Kart {
           steerG.position.copy(w.position);
           const spinG = new THREE.Group();
           w.position.set(0, 0, 0);
-          w.scale.multiplyScalar(0.8);
+          w.scale.multiplyScalar(0.7);
           w.parent.add(steerG);
           steerG.add(spinG);
           spinG.add(w);
-          steerG.position.y -= r * 0.2;
-          this.wheelMeshes.push({ pivot: spinG, steer: isFront ? steerG : null, radius: Math.max(0.2, r * 0.8), spin: 0, isFront: isFront });
+          steerG.position.y -= r * 0.3;
+          this.wheelMeshes.push({ pivot: spinG, steer: isFront ? steerG : null, radius: Math.max(0.2, r * 0.7), spin: 0, isFront: isFront });
         });
         model.position.y = -0.1;
         this.bodyMesh = model;
@@ -31553,14 +31565,14 @@ class Kart {
       this.group.add(flare);
       const wheel = new THREE.Mesh(wheelGeo, wheelMat);
       wheel.rotation.z = Math.PI / 2;
-      wheel.scale.setScalar(0.8);
-      wheel.position.set(p[0], wr * 0.8, p[1]);
+      wheel.scale.setScalar(0.7);
+      wheel.position.set(p[0], wr * 0.7, p[1]);
       this.group.add(wheel);
-      this.wheelMeshes.push({ pivot: wheel, steer: null, radius: wr * 0.8, spin: 0, isFront: pi < 2 });
+      this.wheelMeshes.push({ pivot: wheel, steer: null, radius: wr * 0.7, spin: 0, isFront: pi < 2 });
       const hub = new THREE.Mesh(hubGeo, hubMat);
       hub.rotation.z = Math.PI / 2;
-      hub.scale.setScalar(0.8);
-      hub.position.set(p[0], wr * 0.8, p[1]);
+      hub.scale.setScalar(0.7);
+      hub.position.set(p[0], wr * 0.7, p[1]);
       this.group.add(hub);
     });
     const tailZ = -0.2 - B.tub[2] / 2 - 0.02;
@@ -32478,12 +32490,14 @@ function buildDifficultyPicker() {
   });
 }
 
+const CAR_ART = ['reference/car model 03.jpg', 'reference/4a3161256788c23b741c08dcd7c7488d.jpg', 'reference/car model 02.jpg', 'reference/car model 01.jpg', 'reference/571f422d22350b5cf58e33d2bedd4604.jpg', 'reference/car model.png', 'reference/c9308a1da35fd22437c15ce40d918c04.jpg', 'reference/5d4a2d19aee87ae20f642eb655c4d72d.jpg'];
 function buildCarPicker() {
   const wrap = document.getElementById('cars');
   wrap.innerHTML = '';
   CARS.forEach((c, i) => {
     const b = document.createElement('div');
     b.className = 'car' + (i === selectedCar ? ' selected' : '');
+    b.style.backgroundImage = 'url("' + CAR_ART[i % CAR_ART.length] + '")';
     b.innerHTML = '<div class="swatch" style="background:#' + c.color.toString(16).padStart(6, '0') + '"></div><div class="name">' + c.name + '</div><div class="stat">' + c.body.toUpperCase() + ' · ' + c.desc + '</div>';
     b.addEventListener('click', () => { selectedCar = i; buildCarPicker(); refreshPreview(); });
     wrap.appendChild(b);
@@ -32570,12 +32584,14 @@ function spawnKarts() {
 
 function setupInput() {
   const keyMap = { 'ArrowUp': 'forward', 'KeyW': 'forward', 'ArrowDown': 'backward', 'KeyS': 'backward', 'ArrowLeft': 'left', 'KeyA': 'left', 'ArrowRight': 'right', 'KeyD': 'right', 'ShiftLeft': 'drift', 'ShiftRight': 'drift', 'Space': 'item' };
-  document.addEventListener('keydown', e => { const k = keyMap[e.code]; if (k) { input[k] = true; e.preventDefault(); } });
+  const typing = e => e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
+  document.addEventListener('keydown', e => { if (typing(e)) return; const k = keyMap[e.code]; if (k) { input[k] = true; e.preventDefault(); } });
   document.addEventListener('keydown', e => {
+    if (typing(e)) return;
     if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); e.preventDefault(); }
     if (e.code === 'KeyC' && gameState !== 'menu') { cameraMode = cameraMode === 'chase' ? 'hood' : 'chase'; e.preventDefault(); }
   });
-  document.addEventListener('keyup', e => { const k = keyMap[e.code]; if (k) { input[k] = false; e.preventDefault(); } });
+  document.addEventListener('keyup', e => { if (typing(e)) return; const k = keyMap[e.code]; if (k) { input[k] = false; e.preventDefault(); } });
   const hold = (id, key) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -32696,7 +32712,9 @@ function updatePlayerKart(dt) {
 function syncKart(kart, dt) {
   const ty = trackSpline.getPointAt(kart.trackT).y;
   kart.position.y = ty + 0.4;
-  kart.group.position.set(kart.position.x, ty + (kart.rideH || 0.4), kart.position.z);
+  if (kart.smoothY === undefined) kart.smoothY = ty;
+  kart.smoothY += (ty - kart.smoothY) * Math.min(1, 10 * (dt || 0.016));
+  kart.group.position.set(kart.position.x, kart.smoothY + (kart.rideH || 0.4), kart.position.z);
   kart.group.rotation.y = kart.rotation;
 }
 
@@ -32958,11 +32976,14 @@ function loadBoard() {
   catch (e) { return []; }
 }
 function renderBoard() {
-  const el = document.getElementById('board');
-  if (!el) return;
   const rows = loadBoard();
-  if (!rows.length) { el.innerHTML = '<div class="brow empty">No records yet — set one!</div>'; return; }
-  el.innerHTML = rows.map((r, i) => '<div class="brow"><span>#' + (i + 1) + ' ' + r.name + '</span><span>' + r.car + '</span><span class="mono">' + fmtTime(r.time) + '</span></div>').join('');
+  const html = rows.length
+    ? rows.map((r, i) => '<div class="brow"><span>#' + (i + 1) + ' ' + r.name + '</span><span>' + r.car + '</span><span class="mono">' + fmtTime(r.time) + '</span></div>').join('')
+    : '<div class="brow empty">No records yet — set one!</div>';
+  ['board', 'board-finish'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
 }
 function saveRecord(time, best) {
   const rows = loadBoard();
