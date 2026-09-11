@@ -31792,7 +31792,7 @@ function init() {
   scene.fog = new THREE.Fog(0xf0a878, 220, 780);
   camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.set(0, 5, -10);
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: /shot|demo/.test(location.search) });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
@@ -33002,7 +33002,7 @@ let camLook = null;
 let cameraMode = 'chase';
 function updateCamera(dt) {
   if (!playerKart) return;
-  if (playerKart.labelSprite) playerKart.labelSprite.visible = cameraMode !== 'hood';
+  if (playerKart.labelSprite) playerKart.labelSprite.visible = false;
   if (cameraMode === 'hood') {
     const fx = Math.sin(playerKart.rotation), fz = Math.cos(playerKart.rotation);
     camera.position.set(playerKart.position.x + fx * 0.4, playerKart.position.y + 1.5, playerKart.position.z + fz * 0.4);
@@ -33142,6 +33142,15 @@ function animate() {
 try {
   init();
   window.__kartBooted = true;
+  if (location.search.indexOf('autostart') >= 0) setTimeout(() => { if (!document.getElementById('startBtn').disabled) document.getElementById('startBtn').click(); }, 1500);
+  if (location.search.indexOf('demo') >= 0) setTimeout(() => { if (!document.getElementById('startBtn').disabled) document.getElementById('startBtn').click(); }, 1500);
+  if (location.search.indexOf('shot') >= 0 || location.search.indexOf('demo') >= 0) setTimeout(() => {
+    try {
+      const tc = document.createElement('canvas'); tc.width = 480; tc.height = 270;
+      tc.getContext('2d').drawImage(renderer.domElement, 0, 0, 480, 270);
+      document.title = tc.toDataURL('image/jpeg', 0.72);
+    } catch (e) { document.title = 'SHOT-FAILED ' + e.message; }
+  }, 11000);
 } catch (err) {
   document.getElementById('load-error').style.display = 'block';
   document.getElementById('load-error').textContent = 'Error starting game: ' + err.message + ' (need internet for three.js CDN)';
