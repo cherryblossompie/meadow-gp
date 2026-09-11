@@ -82,7 +82,7 @@ canvas { display: block; }
 <h1>MEADOW GP</h1>
 <p style="color:#e9c46a;font-weight:700;letter-spacing:4px;">A SKETCHBOOK GRAND PRIX</p>
 <p>A,D / Arrows = steer &nbsp; (AUTO-GAS drives for you — turn it off for manual W/S)</p>
-<p>SHIFT = Drift (release after 1s for turbo) &nbsp; SPACE = Use Item &nbsp; P/Esc = Pause</p>
+<p>SHIFT = Drift (release after 1s for turbo) &nbsp; SPACE = Use Item &nbsp; P/Esc = Pause &nbsp; C = Camera</p>
 <p>Drive through blue boxes to get items. 3 laps. Beat 3 AI karts.</p>
 <input id="playerName" maxlength="12" placeholder="YOUR NAME" autocomplete="off"><p style="color:#e9c46a;font-weight:700;margin-top:12px;">CHOOSE YOUR DRIVER:</p>
 <div id="drivers"></div>
@@ -111,7 +111,7 @@ canvas { display: block; }
 <div id="speed-display">0</div>
 <div id="countdown" style="display:none;"></div>
 <canvas id="minimap" width="180" height="180"></canvas>
-<div id="pause-hint">P / Esc = pause</div>
+<div id="pause-hint">P / Esc = pause · C = camera</div>
 </div>
 <div id="finish-screen" style="display:none;">
 <h1 id="finish-text">FINISH!</h1>
@@ -31406,6 +31406,7 @@ class Kart {
     this.trackT = 0;
     this.group = new THREE.Group();
     this.bodyMesh = null;
+    this.labelSprite = null;
     this.wheelMeshes = [];
     this.buildModel(color);
   }
@@ -31438,12 +31439,18 @@ class Kart {
           else ink(o);
         });
         wheels.forEach(w => {
-          const pivot = new THREE.Group();
-          pivot.position.copy(w.position);
+          const r = new THREE.Box3().setFromObject(w).getSize(new THREE.Vector3()).y / 2 || 0.3;
+          const isFront = w.name.indexOf('Front') >= 0;
+          const steerG = new THREE.Group();
+          steerG.position.copy(w.position);
+          const spinG = new THREE.Group();
           w.position.set(0, 0, 0);
-          w.parent.add(pivot);
-          pivot.add(w);
-          this.wheelMeshes.push(pivot);
+          w.scale.multiplyScalar(0.8);
+          w.parent.add(steerG);
+          steerG.add(spinG);
+          spinG.add(w);
+          steerG.position.y -= r * 0.2;
+          this.wheelMeshes.push({ pivot: spinG, steer: isFront ? steerG : null, radius: Math.max(0.2, r * 0.8), spin: 0, isFront: isFront });
         });
         model.position.y = -0.1;
         this.bodyMesh = model;
@@ -31540,18 +31547,20 @@ class Kart {
     const wheelMat = new THREE.MeshPhongMaterial({ color: 0x181818 });
     const hubGeo = new THREE.CylinderGeometry(wr * 0.45, wr * 0.45, 0.26, 10);
     const hubMat = new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 90 });
-    [[-0.9, 1.05], [0.9, 1.05], [-0.9, -1.05], [0.9, -1.05]].forEach(p => {
+    [[-0.9, 1.05], [0.9, 1.05], [-0.9, -1.05], [0.9, -1.05]].forEach((p, pi) => {
       const flare = new THREE.Mesh(flareGeo, paint);
       flare.position.set(p[0], wr * 2 - 0.02, p[1]);
       this.group.add(flare);
       const wheel = new THREE.Mesh(wheelGeo, wheelMat);
       wheel.rotation.z = Math.PI / 2;
-      wheel.position.set(p[0], wr, p[1]);
+      wheel.scale.setScalar(0.8);
+      wheel.position.set(p[0], wr * 0.8, p[1]);
       this.group.add(wheel);
-      this.wheelMeshes.push(wheel);
+      this.wheelMeshes.push({ pivot: wheel, steer: null, radius: wr * 0.8, spin: 0, isFront: pi < 2 });
       const hub = new THREE.Mesh(hubGeo, hubMat);
       hub.rotation.z = Math.PI / 2;
-      hub.position.set(p[0], wr, p[1]);
+      hub.scale.setScalar(0.8);
+      hub.position.set(p[0], wr * 0.8, p[1]);
       this.group.add(hub);
     });
     const tailZ = -0.2 - B.tub[2] / 2 - 0.02;
@@ -31609,7 +31618,8 @@ class Kart {
     tail.position.set(0, B.tubY + 0.05, tailZ);
     this.group.add(tail);
     const css = '#' + color.toString(16).padStart(6, '0');
-    this.group.add(makeLabel(this.driver.face, (this.isPlayer ? playerName + ' ' : '') + this.driver.name, css));
+    this.labelSprite = makeLabel(this.driver.face, (this.isPlayer ? playerName + ' ' : '') + this.driver.name, css);
+    this.group.add(this.labelSprite);
   }
 }
 
@@ -32563,6 +32573,7 @@ function setupInput() {
   document.addEventListener('keydown', e => { const k = keyMap[e.code]; if (k) { input[k] = true; e.preventDefault(); } });
   document.addEventListener('keydown', e => {
     if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); e.preventDefault(); }
+    if (e.code === 'KeyC' && gameState !== 'menu') { cameraMode = cameraMode === 'chase' ? 'hood' : 'chase'; e.preventDefault(); }
   });
   document.addEventListener('keyup', e => { const k = keyMap[e.code]; if (k) { input[k] = false; e.preventDefault(); } });
   const hold = (id, key) => {
@@ -32611,6 +32622,7 @@ function startRace() {
   document.getElementById('hud').style.display = 'block';
   document.getElementById('pause-screen').style.display = 'none';
   pausedFrom = null;
+  camLook = null;
   spawnKarts();
   gameState = 'countdown';
   countdown(3);
@@ -32655,7 +32667,16 @@ function updatePlayerKart(dt) {
   syncKart(kart, dt);
   const tilt = (input.left ? 0.08 : 0) - (input.right ? 0.08 : 0);
   kart.bodyMesh.rotation.z = THREE.MathUtils.lerp(kart.bodyMesh.rotation.z, tilt, 0.1);
-  kart.wheelMeshes.forEach(w => { w.rotation.x += kart.speed * dt * 0.5; });
+  kart.wheelMeshes.forEach(w => {
+    const slip = (gas && Math.abs(kart.speed) > 5 ? (w.isFront ? 3 : 7) : 0) + (kart.drifting && !w.isFront ? 10 : 0);
+    const targetSpin = kart.speed / w.radius + slip;
+    w.spin += (targetSpin - w.spin) * Math.min(1, 8 * dt);
+    w.pivot.rotation.x += w.spin * dt;
+    if (w.steer) {
+      const sT = ((input.left ? 1 : 0) - (input.right ? 1 : 0)) * 0.45 * (kart.speed >= 0 ? 1 : -1);
+      w.steer.rotation.y += (sT - w.steer.rotation.y) * Math.min(1, 10 * dt);
+    }
+  });
   if (kart.drifting && Math.abs(kart.speed) > 30) {
     driftSparkTimer += dt;
     if (driftSparkTimer > 0.03) {
@@ -32709,7 +32730,7 @@ function closestTrackT(pos) {
 }
 
 function kartIdleUpdate(kart) {
-  kart.wheelMeshes.forEach(w => { w.rotation.x += 0.5 * 0.016; });
+  kart.wheelMeshes.forEach(w => { w.pivot.rotation.x += 0.5 * 0.016; });
 }
 
 function nearestTrackT(pos, hint) {
@@ -32747,6 +32768,7 @@ function updateAI(dt) {
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
     ai.rotation += diff * D.aiTurn * dt;
+    ai._steerVis = THREE.MathUtils.clamp(diff * 1.5, -0.45, 0.45);
     let aiMax = ai.maxSpeed * (ai.boostTimer > 0 ? 1.5 : 1);
     let targetSpeed = aiMax * (D.aiCruise + 0.12 * Math.sin(Date.now() * 0.001 + index));
     if (Math.abs(diff) > 0.5) targetSpeed *= 0.6;
@@ -32757,7 +32779,12 @@ function updateAI(dt) {
     ai.trackT = targetT;
     enforceTrackBounds(ai, ai.trackT);
     syncKart(ai, dt);
-    ai.wheelMeshes.forEach(w => { w.rotation.x += ai.speed * dt * 0.5; });
+    ai.wheelMeshes.forEach(w => {
+      const targetSpin = ai.speed / w.radius;
+      w.spin += (targetSpin - w.spin) * Math.min(1, 8 * dt);
+      w.pivot.rotation.x += w.spin * dt;
+      if (w.steer) w.steer.rotation.y += ((ai._steerVis || 0) - w.steer.rotation.y) * Math.min(1, 10 * dt);
+    });
     if (Math.random() < D.aiItem && !ai.item) ai.item = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
     if (ai.item && Math.random() < D.aiItem * 2) useItem(ai);
   });
@@ -32871,8 +32898,16 @@ function getPositions() {
 }
 
 let camLook = null;
+let cameraMode = 'chase';
 function updateCamera(dt) {
   if (!playerKart) return;
+  if (playerKart.labelSprite) playerKart.labelSprite.visible = cameraMode !== 'hood';
+  if (cameraMode === 'hood') {
+    const fx = Math.sin(playerKart.rotation), fz = Math.cos(playerKart.rotation);
+    camera.position.set(playerKart.position.x + fx * 0.4, playerKart.position.y + 1.5, playerKart.position.z + fz * 0.4);
+    camera.lookAt(playerKart.position.x + fx * 14, playerKart.position.y + 0.9, playerKart.position.z + fz * 14);
+    return;
+  }
   const behind = new THREE.Vector3(-Math.sin(playerKart.rotation) * 8, 4.5, -Math.cos(playerKart.rotation) * 8);
   camera.position.lerp(playerKart.position.clone().add(behind), Math.min(1, 2.8 * dt));
   const target = new THREE.Vector3(playerKart.position.x + Math.sin(playerKart.rotation) * 5, playerKart.position.y + 0.6, playerKart.position.z + Math.cos(playerKart.rotation) * 5);
