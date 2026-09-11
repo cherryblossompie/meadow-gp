@@ -32491,15 +32491,15 @@ function createScenery() {
   const peakCols = [0x6b5a9e, 0x6488b0, 0x5a7a8c, 0x7a6a9e];
   for (let i = 0; i < 10; i++) {
     const a = (i / 10) * Math.PI * 2 + 0.25;
-    const dist = 440 + Math.random() * 130;
+    const dist = 600 + Math.random() * 150;
     const cx = Math.cos(a) * dist, cz = Math.sin(a) * dist;
     const baseCol = peakCols[i % peakCols.length];
     const lumps = 2 + (i % 2);
     for (let l = 0; l < lumps; l++) {
-      const r = 45 + Math.random() * 55;
-      const sy = 0.45 + Math.random() * 0.5;
+      const r = 35 + Math.random() * 35;
+      const sy = 0.35 + Math.random() * 0.35;
       const lump = new THREE.Mesh(new THREE.SphereGeometry(r, 9, 7), new THREE.MeshPhongMaterial({ color: baseCol, flatShading: true }));
-      lump.position.set(cx + (Math.random() - 0.5) * 70, r * sy * 0.28, cz + (Math.random() - 0.5) * 70);
+      lump.position.set(cx + (Math.random() - 0.5) * 50, r * sy * 0.28, cz + (Math.random() - 0.5) * 50);
       lump.scale.y = sy;
       scene.add(lump);
       if (Math.random() < 0.8) {
