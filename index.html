@@ -297,7 +297,7 @@ function mountAvatar(parent, name, baseY) {
   const rec = name && AVATAR_CACHE[name];
   if (!rec) return null;
   const m = rec.scene.clone(true);
-  m.scale.setScalar(0.8 / rec.height);
+  m.scale.setScalar(0.55 / rec.height);
   m.position.set(0, baseY, -0.35);
   m.traverse(o => { if (o.isMesh) o.castShadow = true; });
   parent.add(m);
@@ -31542,7 +31542,7 @@ class Kart {
         this.bodyMesh = model;
         this.group.add(model);
         this.rideH = 0.02;
-        if (!mountAvatar(this.group, this.driver.avatar, 0.55)) {
+        if (!mountAvatar(this.group, this.driver.avatar, 0.42)) {
           const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), new THREE.MeshPhongMaterial({ color: 0xf5f5f5, shininess: 60 }));
           helmet.position.set(0, spec.helmetY, -0.3);
           this.group.add(helmet);
@@ -31605,7 +31605,7 @@ class Kart {
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.4), new THREE.MeshPhongMaterial({ color: 0xf2ede2 }));
     torso.position.set(0, B.tubY + 0.45, -0.35);
     this.group.add(torso);
-    if (!mountAvatar(this.group, this.driver.avatar, B.tubY + 0.15)) {
+    if (!mountAvatar(this.group, this.driver.avatar, B.tubY + 0.05)) {
       const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), new THREE.MeshPhongMaterial({ color: 0xf5f5f5, shininess: 60 }));
       helmet.position.set(0, B.tubY + 0.8, -0.3);
       this.group.add(helmet);
