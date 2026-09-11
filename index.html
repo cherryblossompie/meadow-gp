@@ -32909,9 +32909,13 @@ function updateCamera(dt) {
     return;
   }
   const fx = Math.sin(playerKart.rotation), fz = Math.cos(playerKart.rotation);
+  const speedRatio = Math.min(1, Math.abs(playerKart.speed) / 130);
+  const targetFov = 65 + speedRatio * 10;
+  camera.fov += (targetFov - camera.fov) * Math.min(1, 4 * dt);
+  camera.updateProjectionMatrix();
   const behind = new THREE.Vector3(playerKart.position.x - fx * 4.5, playerKart.position.y + 2.3, playerKart.position.z - fz * 4.5);
-  camera.position.lerp(behind, Math.min(1, 6 * dt));
-  const target = new THREE.Vector3(playerKart.position.x + fx * 7, playerKart.position.y + 0.9, playerKart.position.z + fz * 7);
+  camera.position.lerp(behind, Math.min(1, (5 + speedRatio * 7) * dt));
+  const target = new THREE.Vector3(playerKart.position.x + fx * (7 + speedRatio * 4), playerKart.position.y + 0.9, playerKart.position.z + fz * (7 + speedRatio * 4));
   if (!camLook) camLook = target.clone();
   camLook.lerp(target, Math.min(1, 8 * dt));
   camera.lookAt(camLook);
