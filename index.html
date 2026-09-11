@@ -82,7 +82,7 @@ canvas { display: block; }
 <h1>MEADOW GP</h1>
 <p style="color:#e9c46a;font-weight:700;letter-spacing:4px;">A SKETCHBOOK GRAND PRIX</p>
 <p>A,D / Arrows = steer &nbsp; (AUTO-GAS drives for you — turn it off for manual W/S)</p>
-<p>SHIFT = Drift (release after 1s for turbo) &nbsp; SPACE = Use Item &nbsp; P/Esc = Pause &nbsp; C = Top/Hood view</p>
+<p>SHIFT = Drift (release after 1s for turbo) &nbsp; SPACE = Use Item &nbsp; P/Esc = Pause &nbsp; C = Chase/Hood view</p>
 <p>Drive through blue boxes to get items. 3 laps. Beat 3 AI karts.</p>
 <input id="playerName" maxlength="12" placeholder="YOUR NAME" autocomplete="off"><p style="color:#e9c46a;font-weight:700;margin-top:12px;">CHOOSE YOUR DRIVER:</p>
 <div id="drivers"></div>
@@ -111,7 +111,7 @@ canvas { display: block; }
 <div id="speed-display">0</div>
 <div id="countdown" style="display:none;"></div>
 <canvas id="minimap" width="180" height="180"></canvas>
-<div id="pause-hint">P / Esc = pause · C = top/hood view</div>
+<div id="pause-hint">P / Esc = pause · C = chase/hood view</div>
 </div>
 <div id="finish-screen" style="display:none;">
 <h1 id="finish-text">FINISH!</h1>
@@ -32909,8 +32909,12 @@ function updateCamera(dt) {
     return;
   }
   const fx = Math.sin(playerKart.rotation), fz = Math.cos(playerKart.rotation);
-  camera.position.set(playerKart.position.x - fx * 7, playerKart.position.y + 14, playerKart.position.z - fz * 7);
-  camera.lookAt(playerKart.position.x + fx * 4, playerKart.position.y, playerKart.position.z + fz * 4);
+  const behind = new THREE.Vector3(playerKart.position.x - fx * 4.5, playerKart.position.y + 2.3, playerKart.position.z - fz * 4.5);
+  camera.position.lerp(behind, Math.min(1, 6 * dt));
+  const target = new THREE.Vector3(playerKart.position.x + fx * 7, playerKart.position.y + 0.9, playerKart.position.z + fz * 7);
+  if (!camLook) camLook = target.clone();
+  camLook.lerp(target, Math.min(1, 8 * dt));
+  camera.lookAt(camLook);
 }
 
 function updateHUD() {
