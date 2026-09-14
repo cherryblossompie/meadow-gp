@@ -33097,7 +33097,7 @@ function showFinalLap(kart) {
 function updatePlayerKart(dt) { updateHumanKart(playerKart, input, dt); }
 function updateHumanKart(kart, inp, dt) {
   if (!kart) return;
-  if (kart.spinTimer > 0) { kart.spinTimer -= dt; kart.rotation += dt * 10; kart.speed *= 0.95; syncKart(kart, dt); return; }
+  if (kart.spinTimer > 0) { kart.spinTimer -= dt; kart.rotation += dt * 10; kart.speed *= 0.95; kart.trackT = closestTrackT(kart.position); enforceTrackBounds(kart, kart.trackT); syncKart(kart, dt); return; }
   const autoCruise = autoGas && !inp.forward && !inp.backward && gameState === 'racing';
   let maxS = kart.maxSpeed * (autoCruise ? 1.12 : 1);
   if (kart.boostTimer > 0) { maxS *= 1.5; kart.boostTimer -= dt; }
@@ -33157,10 +33157,10 @@ function syncKart(kart, dt) {
   kart.group.rotation.y = kart.rotation;
 }
 
-const ROAD_HALF = 7; // road is 16 wide; karts stay within +/-7 of the center line
+const ROAD_HALF = 7; // CIRCUIT IS THE BOUNDS: road is 16 wide, karts hard-clamped to +/-7 of center line
 function enforceTrackBounds(kart, t) {
-  // Hard guard rails: clamp the kart onto the circuit path so driving is
-  // always bounded to the road. Grinding the rail scrubs speed.
+  // Hard guard rails: the circuit is the bounds — karts can never leave the road.
+  // Clamp lateral offset onto the center line; grinding the rail scrubs speed.
   const c = trackSpline.getPointAt(t);
   const tan = trackSpline.getTangentAt(t).normalize();
   const bin = new THREE.Vector3().crossVectors(tan, new THREE.Vector3(0, 1, 0)).normalize();
@@ -33176,12 +33176,24 @@ function enforceTrackBounds(kart, t) {
 }
 
 function closestTrackT(pos) {
+  // Coarse global scan + local refine so the clamp stays glued to the
+  // circuit even on long tracks (2000m+). Circuit is the bounds, so this must be exact.
   let best = 0, bestD = Infinity;
-  for (let i = 0; i < 100; i++) {
-    const t = i / 100;
+  for (let i = 0; i < 200; i++) {
+    const t = i / 200;
     const p = trackSpline.getPointAt(t);
     const d = (p.x - pos.x) * (p.x - pos.x) + (p.z - pos.z) * (p.z - pos.z);
     if (d < bestD) { bestD = d; best = t; }
+  }
+  let step = 1 / 200;
+  for (let r = 0; r < 3; r++) {
+    step *= 0.5;
+    for (let k = -2; k <= 2; k++) {
+      const t = (((best + k * step) % 1) + 1) % 1;
+      const p = trackSpline.getPointAt(t);
+      const d = (p.x - pos.x) * (p.x - pos.x) + (p.z - pos.z) * (p.z - pos.z);
+      if (d < bestD) { bestD = d; best = t; }
+    }
   }
   return best;
 }
@@ -33207,7 +33219,7 @@ function nearestTrackT(pos, hint) {
 function updateAI(dt) {
   const D = DIFFS[difficulty];
   aiKarts.forEach((ai, index) => {
-    if (ai.spinTimer > 0) { ai.spinTimer -= dt; ai.rotation += dt * 10; ai.speed *= 0.95; syncKart(ai, dt); return; }
+    if (ai.spinTimer > 0) { ai.spinTimer -= dt; ai.rotation += dt * 10; ai.speed *= 0.95; ai.trackT = nearestTrackT(ai.position, ai.trackT); enforceTrackBounds(ai, ai.trackT); syncKart(ai, dt); return; }
     if (ai.boostTimer > 0) ai.boostTimer -= dt;
     if (ai.invincibleTimer > 0) { ai.invincibleTimer -= dt; ai.bodyMesh.visible = Math.floor(ai.invincibleTimer * 10) % 2 === 0; }
     else ai.bodyMesh.visible = true;
@@ -33233,7 +33245,8 @@ function updateAI(dt) {
     if (ai.speed < targetSpeed) ai.speed += 50 * dt; else ai.speed -= 40 * dt;
     const fwd = new THREE.Vector3(Math.sin(ai.rotation), 0, Math.cos(ai.rotation));
     ai.position.add(fwd.multiplyScalar(ai.speed * dt));
-    ai.trackT = targetT;
+    // CIRCUIT IS THE BOUNDS: re-anchor to actual position (not lookahead target), then clamp.
+    ai.trackT = nearestTrackT(ai.position, ai.trackT);
     enforceTrackBounds(ai, ai.trackT);
     syncKart(ai, dt);
     ai.wheelMeshes.forEach(w => {
