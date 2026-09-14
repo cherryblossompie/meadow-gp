@@ -382,6 +382,7 @@ function preloadAvatars() {
           AVATAR_CACHE[name] = { scene: gltf.scene, height: size.y || 1, idle: idle };
           doneCount++;
           if (btn && !startEnabled) btn.textContent = 'LOADING DRIVERS… ' + doneCount + '/' + names.length;
+          try { retrofitAvatars(); } catch (e) {}
         }
       } catch (e) {}
       resolve();
@@ -446,6 +447,31 @@ function dropMixers(root) {
   for (let i = driverMixers.length - 1; i >= 0; i--) {
     if (driverMixers[i].root === root) driverMixers.splice(i, 1);
   }
+}
+function retrofitAvatarToKart(kart) {
+  // Mount the 3D animal onto a kart that was built before its .glb finished
+  // loading (helmet fallback). Same mount params as the build paths, so solo
+  // karts, P2 karts and AI karts all end up with identical avatars.
+  try {
+    if (!kart || kart.avatarRoot || !kart.group || !kart.driver) return false;
+    const rec = kart.driver.avatar && AVATAR_CACHE[kart.driver.avatar];
+    if (!rec) return false;
+    const baseY = (kart.avatarMount && kart.avatarMount.baseY !== undefined) ? kart.avatarMount.baseY : 0.8;
+    const m = mountAvatar(kart.group, kart.driver.avatar, baseY, 1.5, -0.3);
+    if (!m) return false;
+    kart.avatarRoot = m;
+    if (kart.helmetMesh) kart.helmetMesh.visible = false;
+    if (kart.stripeMesh) kart.stripeMesh.visible = false;
+    if (kart.torsoMesh) kart.torsoMesh.visible = false;
+    if (kart.labelSprite) kart.labelSprite.position.y = 3.6;
+    return true;
+  } catch (e) { return false; }
+}
+function retrofitAvatars() {
+  try {
+    if (typeof previewKart !== 'undefined' && previewKart) retrofitAvatarToKart(previewKart);
+  } catch (e) {}
+  try { allKarts().forEach(retrofitAvatarToKart); } catch (e) {}
 }
 
 // Quaternius CC0 car models, embedded as text (file:// can't fetch local .obj)
@@ -31685,6 +31711,8 @@ class Kart {
         const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.5), new THREE.MeshPhongMaterial({ color: this.driver.color }));
         stripe.position.set(0, spec.helmetY + 0.25, -0.3);
         this.group.add(stripe);
+        this.helmetMesh = helmet; this.stripeMesh = stripe;
+        this.avatarMount = { baseY: spec.roundelY };
         const hoodAvatar = mountAvatar(this.group, this.driver.avatar, spec.roundelY, 1.5, -0.3);
         if (hoodAvatar) { helmet.visible = false; stripe.visible = false; this.avatarRoot = hoodAvatar; }
         const rc2 = document.createElement('canvas'); rc2.width = rc2.height = 128;
@@ -31750,6 +31778,8 @@ class Kart {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.5), new THREE.MeshPhongMaterial({ color: this.driver.color }));
     stripe.position.set(0, B.tubY + 1.05, -0.3);
     this.group.add(stripe);
+    this.torsoMesh = torso; this.helmetMesh = helmet; this.stripeMesh = stripe;
+    this.avatarMount = { baseY: B.tubY + 0.15 };
     const hoodAvatar2 = mountAvatar(this.group, this.driver.avatar, B.tubY + 0.15, 1.5, -0.3);
     if (hoodAvatar2) { torso.visible = false; helmet.visible = false; stripe.visible = false; this.avatarRoot = hoodAvatar2; }
     const fairing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.3), paint);
@@ -32883,10 +32913,11 @@ function placeKartAt(kart, t, lateral) {
   kart.group.position.copy(kart.position);
   kart.group.rotation.y = kart.rotation;
 }
-function makeHumanKart(driverIdx, carIdx, name) {
+function makeHumanKart(driverIdx, carIdx, name, wheelR) {
   // Kart bakes the label from global playerName, so swap it during build for P2.
+  // wheelR unifies wheels: P2 shares P1's (solo-perfect) wheel size in multiplayer.
   const keep = playerName;
-  try { playerName = name; return createKart(DRIVERS[driverIdx], CARS[carIdx], true); }
+  try { playerName = name; return createKart(DRIVERS[driverIdx], CARS[carIdx], true, wheelR || 0); }
   finally { playerName = keep; }
 }
 function spawnKarts() {
@@ -32910,7 +32941,7 @@ function spawnKarts() {
   // radius is the reference. Players themselves are never overridden.
   const userWheelR = playerWheelRadius();
   if (isTwoPlayer()) {
-    playerKart2 = makeHumanKart(selectedDriver2, selectedCar2, playerName2);
+    playerKart2 = makeHumanKart(selectedDriver2, selectedCar2, playerName2, userWheelR);
     placeKartAt(playerKart, 0, -2);
     placeKartAt(playerKart2, 0.004, 2);
     const aiDrivers = DRIVERS.map((_, i) => i).filter(i => i !== selectedDriver && i !== selectedDriver2);
@@ -33024,6 +33055,7 @@ function startRace() {
   pausedFrom = null;
   camLook = null; camLook2 = null;
   spawnKarts();
+  retrofitAvatars();
   sizeMainViews();
   applySplitUI();
   gameState = 'countdown';
@@ -33319,6 +33351,7 @@ function checkDroppedItemCollisions() {
 
 function checkKartCollisions() {
   const all = allKarts();
+  const moved = [];
   for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
     const a = all[i], b = all[j];
     if (a.finished || b.finished) continue;
@@ -33327,7 +33360,16 @@ function checkKartCollisions() {
       a.position.add(push.clone().multiplyScalar(0.3));
       b.position.add(push.clone().multiplyScalar(-0.3));
       const ts = a.speed; a.speed = b.speed * 0.9; b.speed = ts * 0.9;
+      moved.push(a, b);
     }
+  }
+  // The circuit is the bounds in every mode: contact shoves (frequent in MP
+  // with two humans bumping) must never leave a kart off the road.
+  for (let k = 0; k < moved.length; k++) {
+    const kart = moved[k];
+    if (!kart || kart.finished) continue;
+    kart.trackT = nearestTrackT(kart.position, kart.trackT);
+    enforceTrackBounds(kart, kart.trackT);
   }
 }
 
