@@ -9,7 +9,10 @@
 body { overflow: hidden; background: #000; font-family: 'Segoe UI', Arial, sans-serif; }
 canvas { display: block; }
 #blocker { position: fixed; inset: 0; z-index: 100; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; background: linear-gradient(rgba(10,14,30,0.72), rgba(10,14,30,0.82)), url("reference/environment/b8a9c282daba7634ea348527b68caf25.jpg") center/cover fixed; }
-#menu { text-align: center; color: #fff; width: 640px; max-width: 94vw; margin: 0 auto; padding: 18px 8px 48px; }
+#menu { text-align: center; color: #fff; width: 1440px; max-width: 98vw; margin: 0 auto; padding: 18px 8px 48px; }
+.setup-row { display: flex; gap: 20px; justify-content: center; align-items: center; }
+.setup-row .picks { flex: 1 1 50%; min-width: 0; }
+.setup-row .preview-col { flex: 1 1 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .driver { background-size: cover; background-position: center; text-shadow: 0 2px 4px #000, 0 0 8px #000; min-height: 110px; }
 .driver .face, .driver .name, .driver .stat { position: relative; }
 .driver::after { content: ''; position: absolute; inset: 0; border-radius: 11px; background: linear-gradient(rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.55)); pointer-events: none; }
@@ -113,20 +116,33 @@ canvas { display: block; }
 <p id="track-help">Drive through blue boxes to get items. Beat 3 AI karts.</p>
 <p style="color:#e9c46a;font-weight:700;margin-top:12px;">GAME MODE:</p>
 <div id="modes" class="tracks"></div>
-<input id="playerName" maxlength="12" placeholder="P1 NAME" autocomplete="off"><p style="color:#e9c46a;font-weight:700;margin-top:12px;">P1 — CHOOSE YOUR DRIVER:</p>
+<input id="playerName" maxlength="12" placeholder="P1 NAME" autocomplete="off">
+<div class="setup-row" id="p1row">
+<div class="picks">
+<p style="color:#e9c46a;font-weight:700;margin-top:12px;">P1 — CHOOSE YOUR DRIVER:</p>
 <div id="drivers"></div>
 <p style="color:#4cc9f0;font-weight:700;margin-top:10px;">P1 — CHOOSE YOUR CAR:</p>
 <div id="cars"></div>
+</div>
+<div class="preview-col">
 <p style="color:#e9c46a;font-weight:700;margin-top:10px;">P1 COMBO:</p>
 <div id="preview3d"></div>
+</div>
+</div>
 <div id="p2setup" style="display:none;">
+<div class="setup-row" id="p2row">
+<div class="picks">
 <input id="playerName2" maxlength="12" placeholder="P2 NAME" autocomplete="off">
 <p style="color:#e9c46a;font-weight:700;margin-top:12px;">P2 — CHOOSE YOUR DRIVER:</p>
 <div id="drivers2"></div>
 <p style="color:#4cc9f0;font-weight:700;margin-top:10px;">P2 — CHOOSE YOUR CAR:</p>
 <div id="cars2"></div>
+</div>
+<div class="preview-col">
 <p style="color:#7df9ff;font-weight:700;margin-top:10px;">P2 COMBO:</p>
 <div id="preview3d-p2"></div>
+</div>
+</div>
 </div>
 <p style="color:#e9c46a;font-weight:700;margin-top:10px;">DIFFICULTY:</p>
 <div id="diffs"></div>
@@ -31624,6 +31640,10 @@ function getModelTemplate(file) {
   return MODEL_CACHE[file];
 }
 
+// Wheel size relative to the modelled stock size. 1.0 matches the reference
+// WHEEL PLACEMENT (red circles): wheels fill the arches on every car.
+const WHEEL_SCALE = 1.0;
+
 class Kart {
   constructor(driver, car, isPlayer = false, wheelRadiusOverride = 0) {
     const color = car.color;
@@ -31689,21 +31709,30 @@ class Kart {
           else ink(o);
         });
         wheels.forEach(w => {
-          const r = new THREE.Box3().setFromObject(w).getSize(new THREE.Vector3()).y / 2 || 0.3;
+          // OBJ wheels carry model-space vertices with identity local
+          // transform, so measure the true axle center (the combined
+          // BackWheels object yields the shared rear axle line, x ~= 0).
+          const wBox = new THREE.Box3().setFromObject(w);
+          const r = wBox.getSize(new THREE.Vector3()).y / 2 || 0.3;
+          const wCenter = wBox.getCenter(new THREE.Vector3());
           const isFront = w.name.indexOf('Front') >= 0;
-          const steerG = new THREE.Group();
-          steerG.position.copy(w.position);
-          const spinG = new THREE.Group();
-          w.position.set(0, 0, 0);
-          // USER'S WHEEL SETTING (default 0.7 tucked) is the reference.
           // Player builds with no override; AI passes the player's final
           // radius in as wheelOverride so all karts share the same size.
-          const wantR = (wheelOverride > 0) ? wheelOverride : r * 0.7;
-          w.scale.multiplyScalar(wantR / r);
+          const wantR = (wheelOverride > 0) ? wheelOverride : r * WHEEL_SCALE;
+          const wScale = wantR / r;
+          // Scale + recenter geometry about the axle center, then put the
+          // steer/spin pivots ON that axle point. (Old code pivoted at the
+          // model origin, so spinning/steering swung wheels up over the
+          // body instead of turning them in the arches.)
+          w.scale.multiplyScalar(wScale);
+          w.position.set(-wScale * wCenter.x, -wScale * wCenter.y, -wScale * wCenter.z);
+          const steerG = new THREE.Group();
           w.parent.add(steerG);
+          // Keep wheel bottoms on the original ground plane at any scale.
+          steerG.position.set(wCenter.x, wCenter.y + (wantR - r), wCenter.z);
+          const spinG = new THREE.Group();
           steerG.add(spinG);
           spinG.add(w);
-          steerG.position.y -= wantR * 0.3 / 0.7;
           this.wheelMeshes.push({ pivot: spinG, steer: isFront ? steerG : null, radius: Math.max(0.2, wantR), spin: 0, isFront: isFront });
         });
         model.position.y = -0.1;
@@ -31806,9 +31835,9 @@ class Kart {
     roundel.position.set(0, B.noseY + B.nose[1] / 2 + 0.01, B.noseZ);
     this.group.add(roundel);
     const wr = B.wheelR;
-    // USER'S WHEEL SETTING: default tucked scale 0.7. Player keeps it;
-    // AI receives player's final radius as wheelOverride.
-    const wantR = (wheelOverride > 0) ? wheelOverride : wr * 0.7;
+    // Same reference proportion as imported models (WHEEL_SCALE).
+    // Player keeps it; AI receives player's final radius as wheelOverride.
+    const wantR = (wheelOverride > 0) ? wheelOverride : wr * WHEEL_SCALE;
     const wScale = wantR / wr;
     const flareGeo = new THREE.BoxGeometry(0.35, 0.22, 1.1);
     const wheelGeo = new THREE.CylinderGeometry(wr, wr, 0.24, 14);
@@ -32824,11 +32853,11 @@ function initPreview() {
   if (!el) return;
   try {
   previewRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  previewRenderer.setSize(300, 200);
+  previewRenderer.setSize(500, 500);
   previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   el.appendChild(previewRenderer.domElement);
   previewScene = new THREE.Scene();
-  previewCam = new THREE.PerspectiveCamera(40, 1.5, 0.1, 100);
+  previewCam = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
   previewCam.position.set(4.4, 2.6, 5.4);
   previewCam.lookAt(0, 0.8, 0);
   previewScene.add(new THREE.AmbientLight(0xffffff, 0.75));
@@ -32841,11 +32870,27 @@ function initPreview() {
   refreshPreview();
   } catch (err) { previewRenderer = null; }
 }
+function groundPreviewKart(kart) {
+  // Imported bodies sit at model.position.y = -0.1 with rideH applied only
+  // in-race, so in the menu the wheels end up at/below the display disc and
+  // the opaque disc hides them. Lift the group so the lowest wheel bottom
+  // rests just above the disc. Works for every car model + the fallback.
+  try {
+    if (!kart || !kart.group || !kart.wheelMeshes || !kart.wheelMeshes.length) return;
+    kart.group.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    kart.wheelMeshes.forEach(w => { if (w.pivot) box.expandByObject(w.pivot); });
+    if (box.isEmpty()) return;
+    const lift = 0.02 - box.min.y;
+    if (lift > 0) kart.group.position.y += lift;
+  } catch (e) {}
+}
 function refreshPreview() {
   if (!previewScene) return;
   if (previewKart) { dropMixers(previewKart.group); previewScene.remove(previewKart.group); }
   previewKart = new Kart(DRIVERS[selectedDriver], CARS[selectedCar], true);
   previewScene.add(previewKart.group);
+  groundPreviewKart(previewKart);
 }
 let previewRenderer2 = null, previewScene2 = null, previewCam2 = null, previewKart2 = null;
 function initPreview2() {
@@ -32853,11 +32898,11 @@ function initPreview2() {
   if (!el) return;
   try {
   previewRenderer2 = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  previewRenderer2.setSize(300, 200);
+  previewRenderer2.setSize(500, 500);
   previewRenderer2.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   el.appendChild(previewRenderer2.domElement);
   previewScene2 = new THREE.Scene();
-  previewCam2 = new THREE.PerspectiveCamera(40, 1.5, 0.1, 100);
+  previewCam2 = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
   previewCam2.position.set(4.4, 2.6, 5.4);
   previewCam2.lookAt(0, 0.8, 0);
   previewScene2.add(new THREE.AmbientLight(0xffffff, 0.75));
@@ -32877,6 +32922,7 @@ function refreshPreview2() {
   try { playerName = playerName2; previewKart2 = new Kart(DRIVERS[selectedDriver2], CARS[selectedCar2], true); }
   finally { playerName = keep; }
   previewScene2.add(previewKart2.group);
+  groundPreviewKart(previewKart2);
 }
 
 function buildDriverPicker() {
