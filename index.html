@@ -61,6 +61,7 @@ canvas { display: block; }
 .brow .mono { font-family: monospace; color: #ffd94d; }
 #wrongway { position: absolute; top: 32%; left: 50%; transform: translateX(-50%) rotate(-4deg); display: none; font-size: 56px; font-weight: 900; letter-spacing: 3px; color: #ff3b30; background: rgba(0,0,0,0.65); border: 4px solid #ff3b30; padding: 10px 34px; border-radius: 16px; text-shadow: 2px 2px 0 #000; animation: wwblink 0.5s steps(2) infinite; }
 #wrongway-p2 { position: absolute; top: 75%; left: 50%; transform: translateX(-50%) rotate(-4deg); display: none; font-size: 44px; font-weight: 900; letter-spacing: 3px; color: #ff3b30; background: rgba(0,0,0,0.65); border: 4px solid #ff3b30; padding: 10px 34px; border-radius: 16px; text-shadow: 2px 2px 0 #000; animation: wwblink 0.5s steps(2) infinite; white-space: nowrap; }
+#ww-debug { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); display: none; font-family: monospace; font-size: 12px; color: #0f0; background: rgba(0,0,0,0.65); padding: 4px 10px; border-radius: 8px; white-space: pre; }
 @keyframes wwblink { 50% { opacity: 0.55; } }
 #final-lap { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); display: none; font-size: 26px; font-weight: 900; letter-spacing: 3px; color: #ffd94d; background: rgba(0,0,0,0.65); border: 2px solid #ffd94d; padding: 6px 22px; border-radius: 12px; text-shadow: 2px 2px 0 #000; white-space: nowrap; }
 #driver-hud { position: absolute; top: 20px; left: 30px; font-size: 22px; font-weight: 800; color: #fff; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 12px; text-shadow: 2px 2px 0 #000; }
@@ -161,6 +162,7 @@ canvas { display: block; }
 <div id="timer-display">⏱ 0:00.0</div>
 <div id="wrongway">↩ WRONG WAY!</div>
 <div id="wrongway-p2">↩ WRONG WAY!</div>
+<div id="ww-debug"></div>
 <div id="final-lap">🏁 FINAL LAP!</div>
 <div id="position-display">4th</div>
 <div id="lap-display">Lap 1/3</div>
@@ -186,6 +188,7 @@ canvas { display: block; }
 <h1>PAUSED</h1>
 <button id="resumeBtn">RESUME</button>
 <button id="quitBtn">RESTART RACE</button>
+<button id="homeBtn">HOME PAGE</button>
 </div>
 <div id="vignette"></div>
 <div id="splitbar"></div>
@@ -298,9 +301,9 @@ const CARS = [
 ];
 let difficulty = 'medium';
 const DIFFS = {
-  easy:   { label: 'EASY',   aiBase: 0.6,  aiCruise: 0.5,  aiTurn: 2.8, aiItem: 0.0012 },
-  medium: { label: 'MEDIUM', aiBase: 0.72, aiCruise: 0.6,  aiTurn: 3.5, aiItem: 0.003 },
-  hard:   { label: 'HARD',   aiBase: 0.86, aiCruise: 0.72, aiTurn: 4.3, aiItem: 0.006 },
+  easy:   { label: 'EASY',   aiBase: 0.95, aiCruise: 0.95, aiTurn: 2.8, aiItem: 0.0012 },
+  medium: { label: 'MEDIUM', aiBase: 1.0,  aiCruise: 1.0,  aiTurn: 3.5, aiItem: 0.003 },
+  hard:   { label: 'HARD',   aiBase: 1.05, aiCruise: 1.05, aiTurn: 4.3, aiItem: 0.006 },
 };
 
 let scene, camera, camera2, renderer, clock;
@@ -32066,6 +32069,7 @@ function init() {
   });
   renderBoard();
   document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+  document.getElementById('homeBtn').addEventListener('click', goHome);
   document.getElementById('quitBtn').addEventListener('click', () => {
     document.getElementById('pause-screen').style.display = 'none';
     resetRace();
@@ -33125,6 +33129,26 @@ function resumeGame() {
   if (lapStart) lapStart += pd;
   if (clock) clock.getDelta();
 }
+function goHome() {
+  document.getElementById('pause-screen').style.display = 'none';
+  document.getElementById('finish-screen').style.display = 'none';
+  document.getElementById('countdown').style.display = 'none';
+  document.getElementById('hud').style.display = 'none';
+  aiKarts.forEach(k => { dropMixers(k.group); scene.remove(k.group); });
+  aiKarts = [];
+  if (playerKart) { dropMixers(playerKart.group); scene.remove(playerKart.group); playerKart = null; }
+  if (playerKart2) { dropMixers(playerKart2.group); scene.remove(playerKart2.group); playerKart2 = null; }
+  droppedItems.forEach(d => { if (d.mesh) scene.remove(d.mesh); });
+  droppedItems = [];
+  particles.forEach(p => scene.remove(p));
+  particles = [];
+  gameState = 'menu';
+  pausedFrom = null;
+  document.getElementById('blocker').style.display = 'block';
+  try { refreshPreview(); } catch (e) {}
+  try { refreshPreview2(); } catch (e) {}
+  try { renderBoard(); } catch (e) {}
+}
 
 function sizeMainViews() {
   const w = window.innerWidth, h = window.innerHeight;
@@ -33359,10 +33383,10 @@ function updateAI(dt) {
     ai.rotation += diff * D.aiTurn * dt;
     ai._steerVis = THREE.MathUtils.clamp(diff * 1.5, -0.45, 0.45);
     let aiMax = Math.min(ai.maxSpeed * (ai.boostTimer > 0 ? 1.5 : 1), SPEED_CAP);
-    let targetSpeed = aiMax * (D.aiCruise + 0.12 * Math.sin(Date.now() * 0.001 + index));
+    let targetSpeed = Math.min(aiMax * (D.aiCruise + 0.12 * Math.sin(Date.now() * 0.001 + index)), SPEED_CAP);
     if (Math.abs(diff) > 0.5) targetSpeed *= 0.6;
     if (lost) targetSpeed *= 0.5;
-    if (ai.speed < targetSpeed) ai.speed += 50 * dt; else ai.speed -= 40 * dt;
+    if (ai.speed < targetSpeed) ai.speed += 90 * dt; else ai.speed -= 40 * dt;
     const fwd = new THREE.Vector3(Math.sin(ai.rotation), 0, Math.cos(ai.rotation));
     ai.position.add(fwd.multiplyScalar(ai.speed * dt));
     // CIRCUIT IS THE BOUNDS: re-anchor to actual position (not lookahead target), then clamp.
@@ -33668,6 +33692,13 @@ function animate() {
     checkBoostPads();
     updateLaps();
     if (playerKart) {
+      const dbgEl = document.getElementById('ww-debug');
+      if (dbgEl) {
+        dbgEl.style.display = 'block';
+        const ddbg = playerKart.lapProgress - lastProg;
+        dbgEl.textContent = 'spd=' + playerKart.speed.toFixed(1) + ' tT=' + playerKart.trackT.toFixed(4) +
+          ' prog=' + playerKart.lapProgress.toFixed(4) + ' dd=' + ddbg.toFixed(5) + ' wwT=' + wwTimer.toFixed(2);
+      }
       const r = wrongwayTick(playerKart, lastProg, wwTimer, dt);
       lastProg = r[0]; wwTimer = r[1];
       document.getElementById('wrongway').style.display = (wwTimer > 0.7 && !playerKart.finished) ? 'block' : 'none';
