@@ -61,7 +61,6 @@ canvas { display: block; }
 .brow .mono { font-family: monospace; color: #ffd94d; }
 #wrongway { position: absolute; top: 32%; left: 50%; transform: translateX(-50%) rotate(-4deg); display: none; font-size: 56px; font-weight: 900; letter-spacing: 3px; color: #ff3b30; background: rgba(0,0,0,0.65); border: 4px solid #ff3b30; padding: 10px 34px; border-radius: 16px; text-shadow: 2px 2px 0 #000; animation: wwblink 0.5s steps(2) infinite; }
 #wrongway-p2 { position: absolute; top: 75%; left: 50%; transform: translateX(-50%) rotate(-4deg); display: none; font-size: 44px; font-weight: 900; letter-spacing: 3px; color: #ff3b30; background: rgba(0,0,0,0.65); border: 4px solid #ff3b30; padding: 10px 34px; border-radius: 16px; text-shadow: 2px 2px 0 #000; animation: wwblink 0.5s steps(2) infinite; white-space: nowrap; }
-#ww-debug { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); display: none; font-family: monospace; font-size: 12px; color: #0f0; background: rgba(0,0,0,0.65); padding: 4px 10px; border-radius: 8px; white-space: pre; }
 @keyframes wwblink { 50% { opacity: 0.55; } }
 #final-lap { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); display: none; font-size: 26px; font-weight: 900; letter-spacing: 3px; color: #ffd94d; background: rgba(0,0,0,0.65); border: 2px solid #ffd94d; padding: 6px 22px; border-radius: 12px; text-shadow: 2px 2px 0 #000; white-space: nowrap; }
 #driver-hud { position: absolute; top: 20px; left: 30px; font-size: 22px; font-weight: 800; color: #fff; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 12px; text-shadow: 2px 2px 0 #000; }
@@ -78,7 +77,7 @@ canvas { display: block; }
 .diff.selected[data-d="easy"] { border-color: #55aa55; background: rgba(85,170,85,0.2); }
 .diff.selected[data-d="medium"] { border-color: #e9c46a; background: rgba(233,196,106,0.2); }
 .diff.selected[data-d="hard"] { border-color: #e63946; background: rgba(230,57,70,0.2); }
-#autogas-btn { margin-top: 12px; padding: 8px 22px; font-size: 14px; font-weight: 700; letter-spacing: 1px; border: 2px solid #e9c46a; border-radius: 30px; cursor: pointer; background: rgba(233,196,106,0.15); color: #e9c46a; }
+#autogas-btn, #music-btn { margin-top: 12px; padding: 8px 22px; font-size: 14px; font-weight: 700; letter-spacing: 1px; border: 2px solid #e9c46a; border-radius: 30px; cursor: pointer; background: rgba(233,196,106,0.15); color: #e9c46a; }
 #touch { position: fixed; inset: auto 0 0 0; z-index: 50; display: none; justify-content: space-between; padding: 0 14px 90px; pointer-events: none; }
 #touch .grp { display: flex; gap: 12px; pointer-events: auto; }
 #touch button { width: 72px; height: 72px; font-size: 28px; border-radius: 50%; border: 3px solid #fff; background: rgba(0,0,0,0.55); color: #fff; touch-action: none; }
@@ -151,6 +150,7 @@ canvas { display: block; }
 <div id="tracks" class="tracks"></div>
 <button id="startBtn">START RACE</button><br>
 <button id="autogas-btn">AUTO-GAS: ON</button>
+<button id="music-btn">♪ MUSIC: ON</button>
 <p style="color:#e9c46a;font-weight:700;margin-top:12px;">🏆 BEST TIMES:</p>
 <div id="board"></div>
 <p style="font-size:12px;margin-top:10px;">Original cartoon drivers (not affiliated with Disney) — same road, same race for you + AI.</p>
@@ -162,7 +162,6 @@ canvas { display: block; }
 <div id="timer-display">⏱ 0:00.0</div>
 <div id="wrongway">↩ WRONG WAY!</div>
 <div id="wrongway-p2">↩ WRONG WAY!</div>
-<div id="ww-debug"></div>
 <div id="final-lap">🏁 FINAL LAP!</div>
 <div id="position-display">4th</div>
 <div id="lap-display">Lap 1/3</div>
@@ -175,7 +174,7 @@ canvas { display: block; }
 <div id="lap-display-p2">Lap 1/3</div>
 <div id="countdown" style="display:none;"></div>
 <canvas id="minimap" width="180" height="180"></canvas>
-<div id="pause-hint">P / Esc = pause · C = chase/hood view</div>
+<div id="pause-hint">P / Esc = pause · C = chase/hood view · M = music</div>
 </div>
 <div id="finish-screen" style="display:none;">
 <h1 id="finish-text">FINISH!</h1>
@@ -32081,13 +32080,136 @@ class DroppedItem {
   }
 }
 
+// ---- Music: original chiptune-style tunes synthesised with Web Audio (no files, plays offline) ----
+const Music = (() => {
+  const SCALES = { major: [0, 2, 4, 5, 7, 9, 11], mixo: [0, 2, 4, 5, 7, 9, 10], minor: [0, 2, 3, 5, 7, 8, 10] };
+  // Melody: one token per 16th note. Number = scale degree (8 = octave up), '-' = hold, '.' = rest.
+  // chords: one scale degree per bar. bass/kick/snare/hat: 16-step patterns ('R' root, '5' fifth, '8' octave, 'x' hit).
+  const SONGS = {
+    menu: { bpm: 104, root: 67, scale: 'major', lead: 'triangle', leadVol: 0.11, chords: [1, 4, 6, 5, 1, 4, 2, 5],
+      melody: ['3 - - - 5 - - - 6 - 5 - 3 - - -', '4 - - - 6 - - - 8 - - - . . . .', '6 - - - 5 - - - 3 - 2 - 1 - - -', '2 - - - 3 - - - 5 - - - . . . .',
+               '5 - - - 8 - - - 7 - 6 - 5 - - -', '6 - - - 4 - - - 6 - - - . . . .', '6 - - - 5 - - - 3 - - - 2 - 3 -', '2 - - - - - - - 5 - - - . . . .'],
+      bass: 'R.......5.......', kick: 'x.......x.......', snare: '........x.......', hat: '..x...x...x...x.' },
+    meadow: { bpm: 148, root: 65, scale: 'major', lead: 'square', leadVol: 0.07, chords: [1, 6, 4, 5, 1, 3, 4, 5],
+      melody: ['5 - 6 5 3 - 1 - 2 - 3 - 5 - - .', '6 - 8 - 6 5 3 - 5 - - - . . 3 4', '6 - 6 5 4 - 4 3 2 - 4 - 6 - 8 -', '7 - 5 - 2 - 5 - 7 - - - . . . .',
+               '8 - 7 8 5 - 3 - 5 - 6 5 3 - 1 -', '3 - 5 - 7 - 5 - 3 - - - . . 2 3', '4 - 6 - 8 - 6 - 4 - 3 - 2 - 4 -', '5 - - - 2 - 5 - 7 - 8 - . . . .'],
+      bass: 'R...5...R...8...', kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.' },
+    valley: { bpm: 132, root: 62, scale: 'mixo', lead: 'sawtooth', leadVol: 0.06, leadCut: 2200, chords: [1, 7, 4, 1, 1, 7, 4, 5],
+      melody: ['1 - 3 - 5 - 7 - 8 - 7 5 - - . .', '7 - 5 - 4 - 5 - 7 - - - . . 5 7', '8 - 7 - 6 - 4 - 6 - 8 - 6 4 - .', '5 - - - 3 - 1 - 3 - - - . . . .',
+               '5 - 8 - 5 - 8 - 9 - 8 7 5 - - .', '7 - 7 5 4 - 5 - 7 - - - 8 - 7 -', '6 - 4 - 6 - 8 - 9 - 8 - 6 - 4 -', '5 - - - 2 - 5 - 7 - - - . . . .'],
+      bass: 'R.....R...5.8...', kick: 'x.....x...x.....', snare: '....x.......x...', hat: '..x...x...x...x.' },
+    tour: { bpm: 160, root: 57, scale: 'minor', lead: 'square', leadVol: 0.065, chords: [1, 6, 7, 1, 1, 6, 4, 5],
+      melody: ['1 - 1 - 5 - 1 - 7 - 6 - 5 - - .', '6 - 5 - 3 - 5 - 6 - - - . . 5 6', '7 - 7 - 9 - 7 - 6 - 5 - 6 - 7 -', '8 - - - 5 - 3 - 1 - - - . . . .',
+               '3 - 5 - 8 - 5 - 3 - 5 - 8 - 10 -', '8 - 6 - 3 - 6 - 8 - - - 6 - 8 -', '9 - 8 - 6 - 4 - 6 - 8 - 9 - 8 -', '7 - - - 5 - 7 - 9 - - - . . . .'],
+      bass: 'R.R.5.R.R.R.5.8.', kick: 'x...x...x...x...', snare: '....x.......x..x', hat: 'xxxxxxxxxxxxxxxx' },
+  };
+  // Parse melodies into per-step note events once.
+  Object.values(SONGS).forEach(S => {
+    const tok = S.melody.join(' ').trim().split(/\s+/);
+    S.len = tok.length; S.notes = new Array(S.len).fill(null);
+    for (let i = 0; i < tok.length; i++) {
+      if (tok[i] === '-' || tok[i] === '.') continue;
+      let n = 1; while (tok[i + n] === '-') n++;
+      S.notes[i] = { deg: +tok[i], len: n };
+    }
+  });
+  const VOL = 0.45;
+  let ctx = null, master = null, noiseBuf = null, timer = null, unlocked = false;
+  let song = null, pending = 'menu', tempo = 1, step = 0, nextT = 0, muted = false;
+  try { muted = localStorage.getItem('meadowgp_mute') === '1'; } catch (e) {}
+  function ensure() {
+    if (ctx) return true;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    ctx = new AC();
+    master = ctx.createGain(); master.gain.value = muted ? 0 : VOL;
+    const comp = ctx.createDynamicsCompressor();
+    master.connect(comp); comp.connect(ctx.destination);
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    timer = setInterval(schedule, 25);
+    return true;
+  }
+  const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+  function midi(S, deg, oct) { const sc = SCALES[S.scale], d = deg - 1; return S.root + sc[((d % 7) + 7) % 7] + 12 * (Math.floor(d / 7) + oct); }
+  function tone(type, m, t, dur, vol, cutoff) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.value = hz(m);
+    let out = o;
+    if (cutoff) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; o.connect(f); out = f; }
+    out.connect(g); g.connect(master);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(vol * 0.55, t + Math.max(0.02, dur));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.06);
+    o.start(t); o.stop(t + dur + 0.08);
+  }
+  function noise(t, dur, vol, type, freq) {
+    const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = noiseBuf; f.type = type; f.frequency.value = freq;
+    s.connect(f); f.connect(g); g.connect(master);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.start(t); s.stop(t + dur + 0.02);
+  }
+  function kick(t) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.2);
+  }
+  function playStep(S, i, t, sd) {
+    const bar = Math.floor(i / 16), s = i % 16, chord = S.chords[bar % S.chords.length];
+    const ev = S.notes[i];
+    if (ev) tone(S.lead, midi(S, ev.deg, 0), t, ev.len * sd * 0.92, S.leadVol, S.leadCut);
+    if (s === 0) [0, 2, 4].forEach(k => tone('sawtooth', midi(S, chord + k, -1), t, sd * 15, 0.018, 1300));
+    const b = S.bass[s];
+    if (b !== '.') tone('triangle', midi(S, chord + (b === '5' ? 4 : b === '8' ? 7 : 0), -2), t, sd * 1.6, 0.2, 900);
+    if (S.kick[s] === 'x') kick(t);
+    if (S.snare[s] === 'x') noise(t, 0.12, 0.2, 'bandpass', 1800);
+    if (S.hat[s] === 'x') noise(t, 0.04, 0.06, 'highpass', 7000);
+  }
+  function schedule() {
+    if (!song || ctx.state !== 'running') return;
+    const sd = 60 / (song.bpm * tempo) / 4;
+    if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.02;
+    while (nextT < ctx.currentTime + 0.12) { playStep(song, step, nextT, sd); nextT += sd; step = (step + 1) % song.len; }
+  }
+  function start(name, delay) { song = name ? SONGS[name] : null; tempo = 1; step = 0; nextT = ctx.currentTime + (delay || 0.05); }
+  return {
+    // Browsers only allow audio after a click or key press: the first one starts the pending tune.
+    unlock() { if (unlocked || !ensure()) return; unlocked = true; ctx.resume(); start(pending); },
+    play(name) { pending = name; if (ctx) start(name); },
+    trackSong() { return ['meadow', 'valley', 'tour'][selectedTrack] || 'meadow'; },
+    speedUp() { tempo = 1.15; },
+    pause() { if (ctx) ctx.suspend(); },
+    resume() { if (ctx && unlocked) ctx.resume(); },
+    blip(go) { if (!ctx || !unlocked) return; const t = ctx.currentTime + 0.01; tone('square', go ? 84 : 72, t, go ? 0.5 : 0.18, 0.12); },
+    fanfare() {
+      pending = 'menu';
+      if (!ctx) return;
+      const S = SONGS.meadow, t = ctx.currentTime + 0.05, sd = 0.09;
+      [[1, 0], [3, 1], [5, 2], [8, 3], [5, 5], [8, 6]].forEach(([d, k], i) => tone('square', midi(S, d, 0), t + k * sd * 1.5, i === 5 ? 0.9 : sd * 1.3, 0.1));
+      [1, 3, 5].forEach(d => tone('sawtooth', midi(S, d, -1), t + 9 * sd, 1.0, 0.04, 1600));
+      start('menu', 2.4);
+    },
+    toggleMute() {
+      muted = !muted;
+      try { localStorage.setItem('meadowgp_mute', muted ? '1' : '0'); } catch (e) {}
+      if (master) master.gain.setTargetAtTime(muted ? 0 : VOL, ctx.currentTime, 0.05);
+      return muted;
+    },
+    isMuted() { return muted; },
+  };
+})();
+
 function init() {
   restoreMenu();
   TOTAL_LAPS = currentTrack().laps || 3;
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x2b3a6e);
   scene.fog = new THREE.Fog(0xf0a878, 220, 780);
-  camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1800);
   camera.position.set(0, 5, -10);
   renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: /shot|demo/.test(location.search) });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -32117,7 +32239,7 @@ function init() {
   buildTunnel(0.28, 0.37);
   buildTunnel(0.64, 0.73);
   buildFarmDressing();
-  camera2 = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera2 = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1800);
   camera2.position.set(0, 5, -10);
   buildDriverPicker();
   buildCarPicker();
@@ -32632,8 +32754,10 @@ function createItemBoxes() {
 }
 
 function clearOfTrack(x, z, margin) {
-  for (let i = 0; i < 60; i++) {
-    const p = trackSpline.getPointAt(i / 60);
+  // Sample every ~8 m so nothing slips onto the road between samples on long tracks.
+  const N = Math.ceil(trackLength / 8);
+  for (let i = 0; i < N; i++) {
+    const p = trackSpline.getPointAt(i / N);
     const dx = p.x - x, dz = p.z - z;
     if (dx * dx + dz * dz < margin * margin) return false;
   }
@@ -32835,8 +32959,8 @@ function createScenery() {
   for (let i = 0; i < 26; i++) {
     const a = Math.random() * Math.PI * 2, r = 150 + Math.random() * 220;
     const hx = Math.cos(a) * r, hz = Math.sin(a) * r;
-    if (!clearOfTrack(hx, hz, 44)) continue;
     const hr = 18 + Math.random() * 26;
+    if (!clearOfTrack(hx, hz, hr + 14)) continue;
     const hill = new THREE.Mesh(new THREE.SphereGeometry(hr, 10, 7), new THREE.MeshPhongMaterial({ color: 0x4c8f43, flatShading: true }));
     hill.scale.y = 0.28;
     hill.position.set(hx, -1.2, hz);
@@ -33181,7 +33305,9 @@ function setupInput() {
     if (typing(e)) return;
     if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); e.preventDefault(); }
     if (e.code === 'KeyC' && gameState !== 'menu') { cameraMode = cameraMode === 'chase' ? 'hood' : 'chase'; e.preventDefault(); }
+    if (e.code === 'KeyM') { syncMusicBtn(Music.toggleMute()); e.preventDefault(); }
   });
+  ['pointerdown', 'keydown'].forEach(ev => window.addEventListener(ev, () => Music.unlock(), { once: true }));
   document.addEventListener('keyup', e => {
     if (typing(e)) return;
     if (isTwoPlayer()) {
@@ -33211,14 +33337,22 @@ function setupInput() {
     autoGas = !autoGas;
     ag.textContent = 'AUTO-GAS: ' + (autoGas ? 'ON' : 'OFF');
   });
+  const mb = document.getElementById('music-btn');
+  if (mb) mb.addEventListener('click', () => syncMusicBtn(Music.toggleMute()));
+  syncMusicBtn(Music.isMuted());
   if ('ontouchstart' in window) document.getElementById('touch').style.display = 'flex';
 }
 
+function syncMusicBtn(muted) {
+  const mb = document.getElementById('music-btn');
+  if (mb) mb.textContent = '♪ MUSIC: ' + (muted ? 'OFF' : 'ON');
+}
 function togglePause() {
   if (gameState === 'racing') {
     pausedFrom = 'racing';
     pauseStart = performance.now();
     gameState = 'paused';
+    Music.pause();
     document.getElementById('pause-screen').style.display = 'flex';
   } else if (gameState === 'paused') {
     resumeGame();
@@ -33226,6 +33360,7 @@ function togglePause() {
 }
 function resumeGame() {
   document.getElementById('pause-screen').style.display = 'none';
+  Music.resume();
   gameState = pausedFrom || 'racing';
   pausedFrom = null;
   const pd = performance.now() - pauseStart;
@@ -33248,6 +33383,8 @@ function goHome() {
   particles = [];
   gameState = 'menu';
   pausedFrom = null;
+  Music.resume();
+  Music.play('menu');
   document.getElementById('blocker').style.display = 'block';
   try { refreshPreview(); } catch (e) {}
   try { refreshPreview2(); } catch (e) {}
@@ -33274,6 +33411,8 @@ function startRace() {
   sizeMainViews();
   applySplitUI();
   gameState = 'countdown';
+  Music.resume();
+  Music.play(null);
   countdown(3);
 }
 function applySplitUI() {
@@ -33328,14 +33467,15 @@ function resetRace() {
 
 function countdown(n) {
   const el = document.getElementById('countdown');
-  if (n > 0) { el.style.display = 'block'; el.textContent = n; setTimeout(() => countdown(n - 1), 1000); }
-  else { el.textContent = 'GO!'; setTimeout(() => { el.style.display = 'none'; }, 800); gameState = 'racing'; raceStart = performance.now(); lapStart = raceStart; lapTimes = []; lapTimes2 = []; finalTotal = 0; finalLap = 0; finalTotal2 = 0; finalLap2 = 0; }
+  if (n > 0) { el.style.display = 'block'; el.textContent = n; Music.blip(false); setTimeout(() => countdown(n - 1), 1000); }
+  else { el.textContent = 'GO!'; Music.blip(true); Music.play(Music.trackSong()); setTimeout(() => { el.style.display = 'none'; }, 800); gameState = 'racing'; raceStart = performance.now(); lapStart = raceStart; lapTimes = []; lapTimes2 = []; finalTotal = 0; finalLap = 0; finalTotal2 = 0; finalLap2 = 0; }
 }
 
 function showFinalLap(kart) {
   const el = document.getElementById('final-lap');
   const k = kart || playerKart;
   if (!el || gameState !== 'racing' || !k || k.finished) return;
+  Music.speedUp();
   el.style.display = 'block';
   if (el._hideT) clearTimeout(el._hideT);
   el._hideT = setTimeout(() => { el.style.display = 'none'; }, 1500);
@@ -33810,6 +33950,7 @@ function saveRecordFor(name, carIdx, driverIdx, time, best) {
 }
 function showFinishScreen() {
   gameState = 'finished';
+  Music.fanfare();
   const order = getPositions();
   if (isTwoPlayer() && playerKart2) {
     const p1 = order.indexOf(playerKart) + 1, p2 = order.indexOf(playerKart2) + 1;
@@ -33855,13 +33996,6 @@ function animate() {
     checkBoostPads();
     updateLaps();
     if (playerKart) {
-      const dbgEl = document.getElementById('ww-debug');
-      if (dbgEl) {
-        dbgEl.style.display = 'block';
-        const ddbg = playerKart.lapProgress - lastProg;
-        dbgEl.textContent = 'spd=' + playerKart.speed.toFixed(1) + ' tT=' + playerKart.trackT.toFixed(4) +
-          ' prog=' + playerKart.lapProgress.toFixed(4) + ' dd=' + ddbg.toFixed(5) + ' wwT=' + wwTimer.toFixed(2);
-      }
       const r = wrongwayTick(playerKart, lastProg, wwTimer, dt);
       lastProg = r[0]; wwTimer = r[1];
       document.getElementById('wrongway').style.display = (wwTimer > 0.7 && !playerKart.finished) ? 'block' : 'none';
