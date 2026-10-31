@@ -145,7 +145,7 @@ canvas { display: block; }
 </div>
 </div>
 </div>
-<p style="color:#e9c46a;font-weight:700;margin-top:10px;">DIFFICULTY:</p>
+<p style="color:#e9c46a;font-weight:700;margin-top:10px;">ENGINE CLASS:</p>
 <div id="diffs"></div>
 <p style="color:#4cc9f0;font-weight:700;margin-top:10px;">CHOOSE TRACK:</p>
 <div id="tracks" class="tracks"></div>
@@ -300,11 +300,18 @@ const CARS = [
   { name: 'Safari',   color: 0xd9a83c, body: 'suv',    model: 'SUV',        topMod: 3,  accelMod: 11, turnMod: 0.05, desc: 'Dune runner' },
 ];
 let difficulty = 'medium';
+// Engine classes (Mario Kart-style): cap = everyone's top speed in km/h; the ai* fields tune CPU skill.
+// aiPace: CPU top speed vs its own kart's; aiCorner: how hard CPUs brake for bends; aiWobble: metres off the line;
+// rbAhead/rbBehind: rubber-band slowdown when ahead of the lead human / push when behind; aiAim: 0 random, 1 aims, 2 aims tight.
 const DIFFS = {
-  easy:   { label: 'EASY',   aiBase: 0.95, aiCruise: 0.95, aiTurn: 2.8, aiItem: 0.0012 },
-  medium: { label: 'MEDIUM', aiBase: 1.0,  aiCruise: 1.0,  aiTurn: 3.5, aiItem: 0.003 },
-  hard:   { label: 'HARD',   aiBase: 1.05, aiCruise: 1.05, aiTurn: 4.3, aiItem: 0.006 },
+  easy:   { label: '50cc',  cap: 200, aiPace: 0.89, aiTurn: 2.8, aiCorner: 0.35, aiWobble: 3.0, rbAhead: 0.18, rbBehind: 0.16, aiItem: 0.0012, aiAim: 0 },
+  medium: { label: '100cc', cap: 250, aiPace: 0.95, aiTurn: 3.5, aiCorner: 0.22, aiWobble: 1.8, rbAhead: 0.10, rbBehind: 0.12, aiItem: 0.003,  aiAim: 1 },
+  hard:   { label: '150cc', cap: 300, aiPace: 0.99, aiTurn: 4.3, aiCorner: 0.15, aiWobble: 0.6, rbAhead: 0.04, rbBehind: 0.08, aiItem: 0.006,  aiAim: 2 },
 };
+const OLD_DIFF_LABELS = { EASY: '50cc', MEDIUM: '100cc', HARD: '150cc' };
+function speedCap() { return DIFFS[difficulty].cap / 3.6; }
+// Driver + car top stat (104..132) maps onto 90..100% of the class cap: a ~5% edge either side of the middle.
+function statTopSpeed(driver, car) { return speedCap() * (0.9 + 0.1 * THREE.MathUtils.clamp((driver.top + car.topMod - 104) / 28, 0, 1)); }
 
 let scene, camera, camera2, renderer, clock;
 let playerKart, playerKart2, aiKarts = [];
@@ -31656,7 +31663,7 @@ class Kart {
     this.wheelRadiusOverride = wheelRadiusOverride || 0;
     this.speed = 0;
     this.rideH = 0.4;
-    this.maxSpeed = isPlayer ? driver.top + car.topMod : (driver.top + car.topMod) * (DIFFS[difficulty].aiBase + Math.random() * 0.08);
+    this.maxSpeed = statTopSpeed(driver, car) * (isPlayer ? 1 : DIFFS[difficulty].aiPace * (0.985 + Math.random() * 0.03));
     this.acceleration = driver.accel + car.accelMod;
     this.brakeForce = 80;
     this.friction = 30;
@@ -33242,7 +33249,7 @@ function updateHumanKart(kart, inp, dt) {
   if (!kart) return;
   if (kart.spinTimer > 0) { kart.spinTimer -= dt; kart.rotation += dt * 10; kart.speed *= 0.95; kart.trackT = closestTrackT(kart.position); enforceTrackBounds(kart, kart.trackT); syncKart(kart, dt); return; }
   const autoCruise = autoGas && !inp.forward && !inp.backward && gameState === 'racing';
-  let maxS = kart.maxSpeed * (autoCruise ? 1.12 : 1);
+  let maxS = kart.maxSpeed;
   if (kart.boostTimer > 0) { maxS *= 1.5; kart.boostTimer -= dt; }
   if (kart.invincibleTimer > 0) { kart.invincibleTimer -= dt; kart.bodyMesh.visible = Math.floor(kart.invincibleTimer * 10) % 2 === 0; }
   else kart.bodyMesh.visible = true;
@@ -33250,7 +33257,7 @@ function updateHumanKart(kart, inp, dt) {
   if (gas) kart.speed += kart.acceleration * (autoCruise ? 1.5 : 1) * dt;
   else if (inp.backward) kart.speed -= kart.brakeForce * dt;
   else { if (kart.speed > 0) kart.speed -= kart.friction * dt; else if (kart.speed < 0) kart.speed += kart.friction * dt; }
-  kart.speed = THREE.MathUtils.clamp(kart.speed, -30, Math.min(maxS, SPEED_CAP));
+  kart.speed = THREE.MathUtils.clamp(kart.speed, -30, Math.min(maxS, speedCap() * (kart.boostTimer > 0 ? BOOST_CAP : 1)));
   let turnMult = Math.min(1, Math.abs(kart.speed) / 40);
   kart.drifting = inp.drift && Math.abs(kart.speed) > 20;
   if (kart.drifting) turnMult *= kart.driftTurnBoost;
@@ -33301,7 +33308,7 @@ function syncKart(kart, dt) {
 }
 
 const ROAD_HALF = 7; // CIRCUIT IS THE BOUNDS: road is 16 wide, karts hard-clamped to +/-7 of center line
-const SPEED_CAP = 300 / 3.6; // 300 km/h max — HUD shows |speed| * 3.6, so cap physics here for humans and AI
+const BOOST_CAP = 1.3; // boosts (mushroom, drift, star) may exceed the class cap by 30%
 function enforceTrackBounds(kart, t) {
   // Hard guard rails: the circuit is the bounds — karts can never leave the road.
   // Clamp lateral offset onto the center line; grinding the rail scrubs speed.
@@ -33373,6 +33380,12 @@ function updateAI(dt) {
     const lookAhead = 0.02 + (ai.speed / 120) * 0.015;
     const targetT = (ai.trackT + lookAhead) % 1;
     let targetPos = trackSpline.getPointAt(targetT);
+    // Imperfect line: weave side to side off the centre line, more on lower classes.
+    if (ai._phase === undefined) ai._phase = Math.random() * 100;
+    const now = performance.now() * 0.001;
+    const wob = D.aiWobble * Math.sin(now * 0.7 + ai._phase) * (0.6 + 0.4 * Math.sin(now * 1.9 + ai._phase * 2));
+    const tTan = trackSpline.getTangentAt(targetT);
+    targetPos.add(new THREE.Vector3(-tTan.z, 0, tTan.x).normalize().multiplyScalar(THREE.MathUtils.clamp(wob, 1 - ROAD_HALF, ROAD_HALF - 1)));
     let lost = false;
     if (offD > 15) { targetPos = nearPt; lost = true; }
     const targetDir = new THREE.Vector3(targetPos.x - ai.position.x, 0, targetPos.z - ai.position.z);
@@ -33382,8 +33395,17 @@ function updateAI(dt) {
     while (diff < -Math.PI) diff += Math.PI * 2;
     ai.rotation += diff * D.aiTurn * dt;
     ai._steerVis = THREE.MathUtils.clamp(diff * 1.5, -0.45, 0.45);
-    let aiMax = Math.min(ai.maxSpeed * (ai.boostTimer > 0 ? 1.5 : 1), SPEED_CAP);
-    let targetSpeed = Math.min(aiMax * (D.aiCruise + 0.12 * Math.sin(Date.now() * 0.001 + index)), SPEED_CAP);
+    // Rubber band against the furthest-along human: ease off when ahead, push when behind.
+    const lead = humanKarts().reduce((m, h) => Math.max(m, h.lap + h.lapProgress), -Infinity);
+    const rb = THREE.MathUtils.clamp((ai.lap + ai.lapProgress - lead) * trackLength / 120, -1, 1);
+    const rbMult = rb > 0 ? 1 - D.rbAhead * rb : 1 - D.rbBehind * rb;
+    const boosting = ai.boostTimer > 0;
+    let targetSpeed = Math.min(ai.maxSpeed * (boosting ? 1.5 : 1) * rbMult, speedCap() * (boosting ? BOOST_CAP : 1));
+    // Brake for the bend ~40 m ahead.
+    const tanNow = trackSpline.getTangentAt(ai.trackT), tanFar = trackSpline.getTangentAt((ai.trackT + 40 / trackLength) % 1);
+    let bend = Math.atan2(tanFar.x, tanFar.z) - Math.atan2(tanNow.x, tanNow.z);
+    bend = Math.abs(Math.atan2(Math.sin(bend), Math.cos(bend)));
+    targetSpeed *= 1 - D.aiCorner * Math.min(1, bend / 0.8);
     if (Math.abs(diff) > 0.5) targetSpeed *= 0.6;
     if (lost) targetSpeed *= 0.5;
     if (ai.speed < targetSpeed) ai.speed += 90 * dt; else ai.speed -= 40 * dt;
@@ -33400,8 +33422,27 @@ function updateAI(dt) {
       if (w.steer) w.steer.rotation.y += ((ai._steerVis || 0) - w.steer.rotation.y) * Math.min(1, 10 * dt);
     });
     if (Math.random() < D.aiItem && !ai.item) ai.item = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
-    if (ai.item && Math.random() < D.aiItem * 2) useItem(ai);
+    if (ai.item) aiMaybeUseItem(ai, D, bend);
   });
+}
+
+// CPU items: 50cc fires at random; 100cc/150cc wait for a human target (150cc lines shells up tighter).
+function aiMaybeUseItem(ai, D, bend) {
+  if (D.aiAim === 0) { if (Math.random() < D.aiItem * 2) useItem(ai); return; }
+  const fwd = new THREE.Vector3(Math.sin(ai.rotation), 0, Math.cos(ai.rotation));
+  const cone = D.aiAim === 2 ? 0.12 : 0.3;
+  let fire = false;
+  if (ai.item === 'shell' || ai.item === 'banana') {
+    humanKarts().forEach(h => {
+      const to = new THREE.Vector3(h.position.x - ai.position.x, 0, h.position.z - ai.position.z);
+      const d = to.length();
+      if (d < 0.1) return;
+      if (ai.item === 'shell' && d < 70 && fwd.angleTo(to) < cone) fire = true;
+      if (ai.item === 'banana' && d < 25 && fwd.angleTo(to) > Math.PI - 0.5) fire = true;
+    });
+  } else if (ai.item === 'mushroom') fire = bend < 0.15;
+  else fire = true;
+  if (fire || Math.random() < D.aiItem * 0.3) useItem(ai);
 }
 
 function useItem(kart) {
@@ -33617,7 +33658,7 @@ function loadBoard() {
 function renderBoard() {
   const rows = loadBoard();
   const html = rows.length
-    ? rows.map((r, i) => '<div class="brow"><span>#' + (i + 1) + ' ' + r.name + '</span><span>' + (r.track || '—') + '</span><span>' + r.car + '</span><span class="mono">' + fmtTime(r.time) + '</span></div>').join('')
+    ? rows.map((r, i) => '<div class="brow"><span>#' + (i + 1) + ' ' + r.name + '</span><span>' + (r.track || '—') + (r.diff ? ' · ' + (OLD_DIFF_LABELS[r.diff] || r.diff) : '') + '</span><span>' + r.car + '</span><span class="mono">' + fmtTime(r.time) + '</span></div>').join('')
     : '<div class="brow empty">No records yet — set one!</div>';
   ['board', 'board-finish'].forEach(id => {
     const el = document.getElementById(id);
