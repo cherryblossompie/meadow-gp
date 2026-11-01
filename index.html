@@ -33484,7 +33484,7 @@ function showFinalLap(kart) {
 function updatePlayerKart(dt) { updateHumanKart(playerKart, input, dt); }
 function updateHumanKart(kart, inp, dt) {
   if (!kart) return;
-  if (kart.spinTimer > 0) { kart.spinTimer -= dt; kart.rotation += dt * 10; kart.speed *= 0.95; kart.trackT = closestTrackT(kart.position); enforceTrackBounds(kart, kart.trackT); syncKart(kart, dt); return; }
+  if (kart.spinTimer > 0) { spinStep(kart, dt); kart.speed *= 0.95; kart.trackT = closestTrackT(kart.position); enforceTrackBounds(kart, kart.trackT); syncKart(kart, dt); return; }
   const autoCruise = autoGas && !inp.forward && !inp.backward && gameState === 'racing';
   let maxS = kart.maxSpeed;
   if (kart.boostTimer > 0) { maxS *= 1.5; kart.boostTimer -= dt; }
@@ -33535,6 +33535,14 @@ function updateHumanKart(kart, inp, dt) {
   if (inp.item && kart.item && gameState === 'racing') { useItem(kart); inp.item = false; }
 }
 
+// Item hits spin the kart exactly one full turn (easing out) and leave it facing the way it was going.
+const SPIN_TIME = 0.8;
+function spinStep(kart, dt) {
+  kart.spinTimer = Math.max(0, kart.spinTimer - dt);
+  const p = 1 - kart.spinTimer / SPIN_TIME;
+  kart.rotation = kart.spinFrom + Math.PI * 2 * (1 - (1 - p) * (1 - p));
+  if (kart.spinTimer === 0) kart.rotation = kart.spinFrom;
+}
 function syncKart(kart, dt) {
   const ty = trackSpline.getPointAt(kart.trackT).y;
   kart.position.y = ty + 0.4;
@@ -33619,7 +33627,7 @@ function nearestTrackT(pos, hint) {
 function updateAI(dt) {
   const D = DIFFS[difficulty];
   aiKarts.forEach((ai, index) => {
-    if (ai.spinTimer > 0) { ai.spinTimer -= dt; ai.rotation += dt * 10; ai.speed *= 0.95; ai.trackT = nearestTrackT(ai.position, ai.trackT); enforceTrackBounds(ai, ai.trackT); syncKart(ai, dt); return; }
+    if (ai.spinTimer > 0) { spinStep(ai, dt); ai.speed *= 0.95; ai.trackT = nearestTrackT(ai.position, ai.trackT); enforceTrackBounds(ai, ai.trackT); syncKart(ai, dt); return; }
     if (ai.boostTimer > 0) ai.boostTimer -= dt;
     if (ai.invincibleTimer > 0) { ai.invincibleTimer -= dt; ai.bodyMesh.visible = Math.floor(ai.invincibleTimer * 10) % 2 === 0; }
     else ai.bodyMesh.visible = true;
@@ -33757,7 +33765,7 @@ function checkDroppedItemCollisions() {
       if (!d.active) return;
       if (d.type === 'shell' && d.owner === kart) return;
       if (kart.position.distanceTo(d.mesh.position) < 2) {
-        kart.spinTimer = 0.8; kart.speed = 0;
+        kart.spinTimer = SPIN_TIME; kart.spinFrom = kart.rotation; kart.speed = 0;
         d.active = false; scene.remove(d.mesh);
       }
     });
