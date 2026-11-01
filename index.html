@@ -113,7 +113,7 @@ canvas { display: block; }
 <p style="color:#e9c46a;font-weight:700;letter-spacing:4px;">A SKETCHBOOK GRAND PRIX</p>
 <p>A,D / Arrows = steer &nbsp; (AUTO-GAS drives for you — turn it off for manual W/S)</p>
 <p>SHIFT = Drift (release after 1s for turbo) &nbsp; SPACE = Use Item &nbsp; P/Esc = Pause &nbsp; C = Chase/Hood view</p>
-<p id="track-help">Drive through blue boxes to get items. Beat 3 AI karts.</p>
+<p id="track-help">Drive through blue boxes to get items. Beat 6 AI karts.</p>
 <p style="color:#e9c46a;font-weight:700;margin-top:12px;">GAME MODE:</p>
 <div id="modes" class="tracks"></div>
 <input id="playerName" maxlength="12" placeholder="P1 NAME" autocomplete="off">
@@ -339,7 +339,7 @@ function restoreMenu() {
   if (selectedDriver2 === selectedDriver) selectedDriver2 = (selectedDriver + 1) % DRIVERS.length;
   if (selectedCar2 === selectedCar) selectedCar2 = (selectedCar + 1) % CARS.length;
 }
-const AI_COUNT = 3;
+const AI_COUNT = 6;
 // Original cartoon drivers — same road + same race for player and AI.
 // (Not Disney characters: Disney IP can't be included, so these are originals with distinct looks/stats.)
 const DRIVERS = [
@@ -32385,7 +32385,7 @@ function buildTrack() {
   const startBin = new THREE.Vector3().crossVectors(startTan, new THREE.Vector3(0, 1, 0)).normalize();
   const startLine = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH, 3), new THREE.MeshPhongMaterial({ map: new THREE.CanvasTexture(sc) }));
   startLine.rotation.x = -Math.PI / 2;
-  startLine.rotation.z = -Math.atan2(startBin.x, startBin.z);
+  startLine.rotation.z = Math.atan2(-startBin.z, startBin.x); // plane width runs across the road
   startLine.position.set(startPos.x, startPos.y + 0.03, startPos.z);
   scene.add(startLine);
 }
@@ -32423,12 +32423,12 @@ function buildStartGantry() {
   mk(-9, 7); mk(9, 7);
   const beam = new THREE.Mesh(new THREE.BoxGeometry(19, 1.6, 1), new THREE.MeshPhongMaterial({ color: 0xe63946 }));
   beam.position.set(pos.x, pos.y + 7, pos.z);
-  beam.rotation.y = Math.atan2(tan.x, tan.z) + Math.PI / 2;
+  beam.rotation.y = Math.atan2(tan.x, tan.z); // box length runs across the road
   ink(beam);
   scene.add(beam);
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(15, 1.5), new THREE.MeshBasicMaterial({ map: makeBannerTex(), side: THREE.DoubleSide }));
   sign.position.set(pos.x, pos.y + 7, pos.z);
-  sign.rotation.y = Math.atan2(tan.x, tan.z) + Math.PI / 2;
+  sign.rotation.y = Math.atan2(tan.x, tan.z) + Math.PI; // faces the oncoming karts
   sign.translateZ(0.55);
   scene.add(sign);
 }
@@ -33057,7 +33057,7 @@ function buildTrackPicker() {
     wrap.appendChild(b);
   });
   const help = document.getElementById('track-help');
-  if (help) help.textContent = 'Racing ' + currentTrack().name + ' — ' + TOTAL_LAPS + ' laps. ' + (isTwoPlayer() ? '2 players + 2 AI karts.' : 'Drive through blue boxes to get items. Beat 3 AI karts.');
+  if (help) help.textContent = 'Racing ' + currentTrack().name + ' — ' + TOTAL_LAPS + ' laps. ' + (isTwoPlayer() ? '2 players + ' + AI_COUNT + ' AI karts.' : 'Drive through blue boxes to get items. Beat ' + AI_COUNT + ' AI karts.');
 }
 
 const CAR_ART = ['reference/car model 03.jpg', 'reference/4a3161256788c23b741c08dcd7c7488d.jpg', 'reference/car model 02.jpg', 'reference/car model 01.jpg', 'reference/571f422d22350b5cf58e33d2bedd4604.jpg', 'reference/car model.png', 'reference/c9308a1da35fd22437c15ce40d918c04.jpg', 'reference/5d4a2d19aee87ae20f642eb655c4d72d.jpg'];
@@ -33168,7 +33168,7 @@ function buildModePicker() {
   const wrap = document.getElementById('modes');
   if (!wrap) return;
   wrap.innerHTML = '';
-  [['1P', 'SOLO', 'You vs 3 AI'], ['2P', 'SPLIT-SCREEN', 'P1 WASD + Space · P2 Arrows + Enter · 2 AI']].forEach(m => {
+  [['1P', 'SOLO', 'You vs ' + AI_COUNT + ' AI'], ['2P', 'SPLIT-SCREEN', 'P1 WASD + Space · P2 Arrows + Enter · ' + AI_COUNT + ' AI']].forEach(m => {
     const b = document.createElement('div');
     b.className = 'mode' + (gameMode === m[0] ? ' selected' : '');
     b.innerHTML = '<div class="tname">' + (gameMode === m[0] ? '● ' : '○ ') + m[0] + ' — ' + m[1] + '</div><div class="tstat">' + m[2] + '</div>';
@@ -33184,7 +33184,7 @@ function syncP2Setup() {
     ? 'P1: W/A/S/D + LeftShift drift + Space item · P2: Arrows + RightShift drift + Enter item · P/Esc pause'
     : 'A,D / Arrows = steer · (AUTO-GAS drives for you — turn it off for manual W/S)';
   const th = document.getElementById('track-help');
-  if (th) th.textContent = 'Racing ' + currentTrack().name + ' — ' + TOTAL_LAPS + ' laps. ' + (isTwoPlayer() ? '2 players + 2 AI karts.' : 'Drive through blue boxes to get items. Beat 3 AI karts.');
+  if (th) th.textContent = 'Racing ' + currentTrack().name + ' — ' + TOTAL_LAPS + ' laps. ' + (isTwoPlayer() ? '2 players + ' + AI_COUNT + ' AI karts.' : 'Drive through blue boxes to get items. Beat ' + AI_COUNT + ' AI karts.');
 }
 function buildDriverPicker2() {
   const wrap = document.getElementById('drivers2');
@@ -33213,11 +33213,11 @@ function buildCarPicker2() {
   });
 }
 
-// Grid slots (0..0.022) sit just behind the start line, and lap progress starts at the kart's real
-// (negative) offset: positions are true from the off and every kart covers the same distance to the flag.
-const GRID_BACK = 0.025;
-function placeKartAt(kart, slot, lateral) {
-  const g = slot - GRID_BACK, t = g + 1;
+// Two-column staggered grid just behind the start line: slot 0 is pole (6 m back), each later slot sits
+// 4 m further back on the other side. Lap progress starts at the kart's real (negative) offset, so
+// positions are true from the off and every kart covers the same distance to the flag.
+function placeKartAt(kart, slot) {
+  const g = -(6 + slot * 4) / trackLength, t = g + 1, lateral = slot % 2 === 0 ? -3 : 3;
   const tan = trackSpline.getTangentAt(t).normalize();
   kart.trackT = t; kart.lapProgress = g; kart.lastCheckpoint = t; kart.lap = 0; kart.finished = false;
   kart.rotation = Math.atan2(tan.x, tan.z);
@@ -33260,24 +33260,24 @@ function spawnKarts() {
   const userWheelR = playerWheelRadius();
   if (isTwoPlayer()) {
     playerKart2 = makeHumanKart(selectedDriver2, selectedCar2, playerName2, userWheelR);
-    placeKartAt(playerKart, 0, -2);
-    placeKartAt(playerKart2, 0.004, 2);
+    placeKartAt(playerKart, AI_COUNT);
+    placeKartAt(playerKart2, AI_COUNT + 1);
     const aiDrivers = DRIVERS.map((_, i) => i).filter(i => i !== selectedDriver && i !== selectedDriver2);
     const usedCars = [selectedCar, selectedCar2];
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < AI_COUNT; i++) {
       let ci = (selectedCar + i + 1) % CARS.length;
       while (usedCars.includes(ci)) ci = (ci + 1) % CARS.length;
       usedCars.push(ci);
       const ai = createKart(DRIVERS[aiDrivers[i % aiDrivers.length]], CARS[ci], false, userWheelR);
-      placeKartAt(ai, 0.012 + i * 0.006, i % 2 === 0 ? -2 : 2);
+      placeKartAt(ai, i);
       aiKarts.push(ai);
     }
   } else {
-    placeKartAt(playerKart, 0, -2);
+    placeKartAt(playerKart, AI_COUNT);
     const aiDrivers = DRIVERS.map((_, i) => i).filter(i => i !== selectedDriver);
     for (let i = 0; i < AI_COUNT; i++) {
       const ai = createKart(DRIVERS[aiDrivers[i % aiDrivers.length]], CARS[(selectedCar + i + 1) % CARS.length], false, userWheelR);
-      placeKartAt(ai, 0.01 + i * 0.006, i % 2 === 0 ? -2 : 2);
+      placeKartAt(ai, i);
       aiKarts.push(ai);
     }
   }
